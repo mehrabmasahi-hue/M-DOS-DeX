@@ -11,8 +11,8 @@ android {
         applicationId = "com.goldan.mdosdex"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     flavorDimensions += "device"
@@ -30,9 +30,7 @@ android {
     }
 
     buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
+        release { isMinifyEnabled = false }
         debug { }
     }
     compileOptions {
@@ -40,4 +38,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+    implementation("com.google.zxing:core:3.5.3")
+    phoneImplementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

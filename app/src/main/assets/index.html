@@ -1394,6 +1394,84 @@ function frRender(){
 function frGo(n){frStep=n;frRender()}
 function startFirstRun(){if(!localStorage.getItem(FR_KEY)||!L('mdosProfile',null)){frGo(0);$('#firstRun').classList.add('show')}else if(!L('mdosEdition','')){frGo(1);$('#firstRun').classList.add('show')}}
 
+/* ---------- Phone Link: built-in local companion ---------- */
+function mdosLinkInstallPackage(raw){
+ try{
+  const pkg=parsePkg(String(raw||''));
+  installPackage(pkg);
+  build();
+  toast('برنامه نصب شد',pkg.name+' به M-DOS اضافه شد.');
+  setTimeout(()=>launch('pk:'+pkg.id),180);
+  return {ok:true,id:pkg.id,name:pkg.name};
+ }catch(err){toast('نصب LLMPK ناموفق بود',err.message||'بسته معتبر نیست');return {ok:false,error:err.message||'بسته نامعتبر است'}}
+}
+function mdosLinkUninstallPackage(id){
+ try{
+  if(!lpk[id])return false;
+  Object.keys(wins).filter(k=>wins[k].app==='pk:'+id).forEach(shut);
+  delete lpk[id];
+  const perms=L('mpPerms',{})||{};delete perms[id];S('mpPerms',perms);
+  Object.keys(localStorage).filter(k=>k.startsWith('mpk:'+id+':')).forEach(k=>localStorage.removeItem(k));
+  S('mlpk',lpk);build();toast('برنامه حذف شد',id);return true;
+ }catch(e){toast('خطا',e.message||'حذف برنامه انجام نشد');return false}
+}
+function mdosLinkImportFile(name,mime,base64){
+ try{
+  if(!base64||base64.length>1800000)throw Error('این فایل برای فضای فایل مجازی بزرگ است؛ در فضای داخلی Phone Link نگهداری می‌شود.');
+  const clean=String(name||'received-file').replace(/[\\/:*?"<>|]/g,'_').slice(0,120);
+  const ext=(clean.split('.').pop()||'').toLowerCase();
+  const category=['png','jpg','jpeg','webp','gif','bmp','svg','avif','heic'].includes(ext)?'Images':
+   ['mp4','mkv','mov','webm','avi','3gp','m4v'].includes(ext)?'Videos':
+   ['mp3','wav','ogg','m4a','aac','flac'].includes(ext)?'Audio':
+   ['pdf','doc','docx','txt','md','rtf','odt'].includes(ext)?'Documents':'Downloads';
+  let target=node(category);if(!target){ensureMdosFolders();target=node(category)}
+  let finalName=clean,n=2;while(target.c[finalName]){const stem=clean.includes('.')?clean.substring(0,clean.lastIndexOf('.')):clean;const suffix=clean.includes('.')?'.'+clean.split('.').pop():'';finalName=stem+' ('+n+++')'+suffix}
+  target.c[finalName]=F('data:'+(mime||'application/octet-stream')+';base64,'+base64,{encoding:'data-url',mime:mime||'application/octet-stream',originalName:clean});
+  sv();toast('فایل به M-DOS اضافه شد',finalName);return {ok:true,name:finalName};
+ }catch(e){toast('انتقال به فضای فایل M-DOS',e.message||'ناموفق');return {ok:false,error:e.message||'ناموفق'}}
+}
+function phoneLinkApp(el){
+ const api=window.PhoneLinkNative;
+ if(!api){el.append(h('p','mu','Phone Link فقط در نسخه Android TV / M-DOS DeX در دسترس است.'));return}
+ el.style.cssText+=';overflow:auto;padding:10px';
+ const pair=(()=>{try{return JSON.parse(api.getPairInfo())}catch{return {}}})();
+ const title=h('div','card','<div style="font-size:22px;font-weight:900">🔗 Phone Link</div><div class="mu">اتصال بی‌سیم گوشی به M-DOS بدون نیاز به اجرای M-DOS روی گوشی</div>');el.append(title);
+ const qrCard=h('div','card');qrCard.style.cssText+=';display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px';
+ const qr=h('img');qr.alt='کد QR اتصال Phone Link';qr.src=api.getQrDataUrl();qr.style.cssText='width:min(220px,70vw);height:auto;background:#fff;padding:8px;border-radius:14px';qrCard.append(qr);
+ qrCard.append(h('b','','برای اتصال، QR را از برنامه Link to M-DOS اسکن کنید'));
+ qrCard.append(h('div','mu','گوشی و دستگاه M-DOS باید به یک شبکه Wi-Fi متصل باشند.'));
+ qrCard.append(h('small','mu',(pair.url||'آدرس شبکه در دسترس نیست')+'  ·  پورت '+8765));
+ const refresh=h('button','btn s','به‌روزرسانی وضعیت و فایل‌ها');refresh.onclick=()=>drawFiles();qrCard.append(refresh);el.append(qrCard);
+ const tabs=h('div','row');const filesBtn=h('button','btn s','فایل‌ها و رسانه‌ها'),appsBtn=h('button','btn s','برنامه‌های LLMPK');tabs.append(filesBtn,appsBtn);el.append(tabs);
+ const area=h('div');el.append(area);
+ function drawApps(){area.innerHTML='';let apps=[];try{apps=JSON.parse(api.getAppsJson())}catch{}
+  area.append(h('div','card','<b>برنامه‌های نصب‌شده از Phone Link</b><div class="mu">بسته‌های LLMPK در M-DOS نصب می‌شوند و در فهرست برنامه‌ها قابل اجرا هستند.</div>'));
+  if(!apps.length){area.append(h('p','mu','هنوز برنامه‌ای دریافت نشده است. در گوشی، «برنامه جدید» را بزنید.'));return}
+  apps.forEach(app=>{const card=h('div','card',`<b>📦 ${esc(app.name||app.id)}</b><div class="mu">${esc(app.id)} · نسخه ${esc(app.version||'?')}</div>`);const row=h('div','row');const open=h('button','btn s','اجرا');open.onclick=()=>launch('pk:'+app.id);const remove=h('button','btn s red','حذف');remove.onclick=()=>{if(confirm('برنامه '+app.name+' حذف شود؟')){mdosLinkUninstallPackage(app.id);drawApps()}};row.append(open,remove);card.append(row);area.append(card)})
+ }
+ function drawFiles(){area.innerHTML='';let files=[];try{files=JSON.parse(api.getFilesJson())}catch{}
+  area.append(h('div','card','<b>فایل‌های دریافت‌شده از گوشی</b><div class="mu">عکس‌ها و ویدئوها را همین‌جا پیش‌نمایش کنید یا به فضای فایل مجازی M-DOS اضافه کنید.</div>'));
+  if(!files.length){area.append(h('p','mu','هنوز فایلی دریافت نشده است. از برنامه Link to M-DOS یک فایل ارسال کنید.'));return}
+  const preview=h('div','card');area.append(preview);
+  files.forEach(file=>{
+   const row=h('div','card');const mime=String(file.mime||'');const isApp=file.type==='llmpk'||/llmpk/i.test(file.name);
+   row.append(h('b','', (isApp?'📦 ':mime.startsWith('image/')?'🖼️ ':mime.startsWith('video/')?'🎬 ':'📄 ')+esc(file.name)));
+   row.append(h('small','mu',Math.max(1,Math.round((Number(file.size)||0)/1024))+' KB'));
+   const actions=h('div','row');
+   if(!isApp){const view=h('button','btn s','نمایش');view.onclick=()=>{preview.innerHTML='<b>پیش‌نمایش: '+esc(file.name)+'</b>';if(mime.startsWith('image/')){const img=h('img');img.src=file.url;img.style.cssText='max-width:100%;max-height:360px;object-fit:contain;border-radius:10px';preview.append(img)}else if(mime.startsWith('video/')){const v=h('video');v.src=file.url;v.controls=true;v.playsInline=true;v.style.cssText='width:100%;max-height:360px';preview.append(v)}else{const a=h('a','btn s','باز کردن / دریافت فایل');a.href=file.url;a.target='_blank';a.download=file.name;preview.append(a)}};actions.append(view);
+    const save=h('button','btn s','افزودن به فایل‌های M-DOS');save.onclick=()=>{const b64=api.readFileBase64(file.name);if(!b64){toast('فایل بزرگ است','این فایل در فضای داخلی Phone Link نگهداری می‌شود و از همین بخش قابل نمایش است.');return}mdosLinkImportFile(file.name,mime,b64)};actions.append(save)
+   }else{const install=h('button','btn s','نصب و اجرا');install.onclick=()=>{const raw=api.readTextFile(file.name);if(raw)mdosLinkInstallPackage(raw);else toast('خطا','خواندن بسته LLMPK ممکن نشد')};actions.append(install)}
+   const del=h('button','btn s red','حذف فایل');del.onclick=()=>{if(confirm('این فایل حذف شود؟')){api.deleteFile(file.name);drawFiles()}};actions.append(del);row.append(actions);area.append(row)
+  })
+ }
+ filesBtn.onclick=drawFiles;appsBtn.onclick=drawApps;drawFiles();
+}
+window.MDOSLink={importPackageFromText:mdosLinkInstallPackage,uninstallPackage:mdosLinkUninstallPackage,importFileFromBase64:mdosLinkImportFile};
+APPS.phonelink={n:'Phone Link',i:'🔗',b:phoneLinkApp};
+if(!PIN.includes('phonelink'))PIN.push('phonelink');
+if(!DESK.includes('phonelink'))DESK.push('phonelink');
+
+
 apply();build();renderTaskView();if(mdosPrefs.scanStartup&&localStorage.getItem(FR_KEY))setTimeout(()=>launch('sec'),2800);if(mdosPrefs.backupReminder&&localStorage.getItem(FR_KEY)){const period={daily:86400000,weekly:604800000,monthly:2592000000}[mdosPrefs.backupFrequency]||604800000;const last=+(localStorage.getItem('mdosLastBackup')||0);if(!last||Date.now()-last>period)setTimeout(()=>toast('یادآوری پشتیبان‌گیری','از بخش تنظیمات، یک نسخه پشتیبان از اطلاعاتت بگیر.'),4200)}if(mdosPrefs.clearOnExit)addEventListener('beforeunload',()=>localStorage.removeItem('mdosLastSearch'));
 setTimeout(()=>{$('#bt').style.opacity=0;setTimeout(()=>{$('#bt').remove();if(localStorage.getItem(FR_KEY)&&L('mdosProfile',null)){lock()}else{startFirstRun()}},500)},7500);
 </script>
