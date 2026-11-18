@@ -42,5 +42,5 @@ android {
 
 dependencies {
     implementation("com.google.zxing:core:3.5.3")
-    phoneImplementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    add("phoneImplementation", "com.journeyapps:zxing-android-embedded:4.3.0")
 }
