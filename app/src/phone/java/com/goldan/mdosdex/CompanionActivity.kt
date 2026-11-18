@@ -109,21 +109,31 @@ class CompanionActivity : Activity() {
     }
 
     private fun startQrScanner() {
-        IntentIntegrator(this).apply {
-            setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
-            setPrompt("کد QR برنامه Phone Link را اسکن کنید")
-            setBeepEnabled(false)
-            setOrientationLocked(false)
-            initiateScan()
+        try {
+            IntentIntegrator(this).apply {
+                setCaptureActivity(MdosCaptureActivity::class.java)
+                setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+                setPrompt("کد QR برنامه Phone Link را اسکن کنید")
+                setBeepEnabled(false)
+                setOrientationLocked(true)
+                initiateScan()
+            }
+        } catch (e: Exception) {
+            scanAfterPermission = false
+            Toast.makeText(this, "باز کردن اسکنر ناموفق بود: ${e.message ?: "خطای دوربین"}", Toast.LENGTH_LONG).show()
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_PERMISSION) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED && scanAfterPermission) startQrScanner()
-            else Toast.makeText(this, "برای اسکن QR مجوز دوربین لازم است.", Toast.LENGTH_LONG).show()
+            val shouldScan = scanAfterPermission
             scanAfterPermission = false
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED && shouldScan) {
+                window.decorView.post { if (!isFinishing && !isDestroyed) startQrScanner() }
+            } else {
+                Toast.makeText(this, "برای اسکن QR مجوز دوربین لازم است.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
