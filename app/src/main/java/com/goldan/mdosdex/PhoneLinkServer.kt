@@ -296,6 +296,9 @@ class PhoneLinkServer(
     private fun respondJson(out: BufferedOutputStream, status: Int, data: JSONObject) =
         respond(out, status, if (status == 200) "OK" else if (status == 401) "Unauthorized" else if (status == 404) "Not Found" else "Bad Request", data.toString(), "application/json; charset=utf-8")
 
+    private fun respondJson(out: BufferedOutputStream, status: Int, data: JSONArray) =
+        respond(out, status, "OK", data.toString(), "application/json; charset=utf-8")
+
     private fun respond(out: BufferedOutputStream, status: Int, reason: String, body: String, mime: String = "text/plain; charset=utf-8") {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val header = "HTTP/1.1 $status $reason\r\nContent-Type: $mime\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-MDOS-Token, X-File-Name, X-File-Mime\r\nCache-Control: no-store\r\n\r\n"

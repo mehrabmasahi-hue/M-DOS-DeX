@@ -373,7 +373,7 @@ class CompanionActivity : Activity() {
         content.addView(grid)
         val entry = EditText(this).apply {
             hint = "متن یا فرمان را وارد کنید"
-            setHintTextColor(muted); setTextColor(text); textSize = 15f
+            setHintTextColor(muted); setTextColor(this@CompanionActivity.text); textSize = 15f
             setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_SEND
             background = rounded(panel, 12); setPadding(dp(12), dp(8), dp(12), dp(8))
         }
@@ -472,7 +472,7 @@ class CompanionActivity : Activity() {
         text = value; textSize = size; setTextColor(color); if (bold) setTypeface(typeface, Typeface.BOLD)
     }
     private fun button(value: String, color: Int, action: () -> Unit): Button = Button(this).apply {
-        text = value; setTextColor(if (color == yellow) navy else text); textSize = 14f
+        text = value; setTextColor(if (color == yellow) navy else this@CompanionActivity.text); textSize = 14f
         isAllCaps = false; background = rounded(color, 12); setOnClickListener { action() }
     }
     private fun rounded(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
