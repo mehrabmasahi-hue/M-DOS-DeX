@@ -50,6 +50,7 @@ class MainActivity : Activity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     applyTelevisionLayout()
+                    installTelevisionNavigation()
                     injectRemoteControlApi()
                     injectPhoneLinkPairingUi()
                 }
@@ -57,71 +58,111 @@ class MainActivity : Activity() {
             webChromeClient = WebChromeClient()
             isFocusable = true
             isFocusableInTouchMode = true
-            loadUrl("file:///android_asset/index.html")
         }
         setContentView(web)
         web.requestFocus()
+        web.post { web.loadUrl("file:///android_asset/index.html") }
     }
 
     private fun applyImmersiveMode() {
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             )
     }
 
-    /** Uses viewport-relative sizing so the desktop scales correctly on 720p, 1080p and 4K TVs. */
+    /** TV sizing for the existing M-DOS desktop; original HTML shell and apps remain unchanged. */
     private fun applyTelevisionLayout() {
         val script = """
             (function(){
               if(document.getElementById('mdos-tv-layout')) return;
-              const style=document.createElement('style');
-              style.id='mdos-tv-layout';
-              style.textContent = `
-                :root{--mdos-tv-bar:clamp(56px,6.3vh,76px)}
-                html,body{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;zoom:1!important}
-                body{font-size:clamp(14px,1.05vw,18px)!important}
-                #desk{position:fixed!important;inset:0 0 var(--mdos-tv-bar) 0!important;overflow:hidden!important}
-                #tb{position:fixed!important;inset:auto 0 0 0!important;width:100%!important;height:var(--mdos-tv-bar)!important;min-height:var(--mdos-tv-bar)!important;max-height:var(--mdos-tv-bar)!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;align-items:center!important;direction:ltr!important;padding:0 clamp(12px,2vw,30px)!important;z-index:99999!important;box-sizing:border-box!important}
-                #weatherSlot{grid-column:1!important;justify-self:start!important;direction:rtl!important;min-width:0!important;max-width:30vw!important;overflow:hidden!important}
-                #cen{grid-column:2!important;justify-self:center!important;min-width:0!important;max-width:45vw!important;display:flex!important;align-items:center!important;gap:clamp(3px,.45vw,8px)!important}
-                #tray{grid-column:3!important;justify-self:end!important;direction:rtl!important;display:flex!important;align-items:center!important;gap:clamp(6px,1vw,16px)!important;min-width:0!important;max-width:36vw!important;overflow:hidden!important}
-                #weatherBtn{max-width:100%!important;white-space:nowrap!important;font-size:clamp(11px,.9vw,15px)!important}
-                #tray span,#clk{font-size:clamp(11px,.9vw,15px)!important}
-                #st{width:clamp(42px,4vw,54px)!important;height:clamp(42px,4vw,54px)!important;flex:none!important}
-                #st img{width:clamp(28px,2.6vw,36px)!important;height:clamp(28px,2.6vw,36px)!important}
-                #tasks{max-width:36vw!important;overflow:hidden!important;display:flex!important;gap:clamp(2px,.35vw,7px)!important}
-                .tk{width:clamp(34px,3.2vw,44px)!important;height:clamp(38px,4.5vh,48px)!important;font-size:clamp(17px,1.6vw,23px)!important;flex:none!important}
-                #ic{position:absolute!important;top:clamp(12px,1.8vh,24px)!important;right:clamp(14px,2vw,32px)!important;left:auto!important;height:calc(100% - clamp(24px,3.6vh,48px))!important;grid-auto-columns:clamp(88px,7.8vw,120px)!important;grid-template-rows:repeat(auto-fill,minmax(clamp(94px,10.5vh,120px),auto))!important;gap:clamp(5px,.65vw,11px)!important;align-content:start!important}
-                .ico{width:clamp(84px,7.5vw,114px)!important;height:clamp(88px,10vh,116px)!important;font-size:clamp(12px,.95vw,15px)!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important}
-                .ico b{font-size:clamp(32px,3vw,46px)!important;line-height:1.15!important}
-                .ico span{max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;text-align:center!important}
-                .win:not(.mx){width:min(72vw,1280px)!important;height:min(72vh,900px)!important;max-width:calc(100vw - 40px)!important;max-height:calc(100vh - var(--mdos-tv-bar) - 24px)!important}
-                #sm,#qs,#searchPanel,#weatherPanel{bottom:calc(var(--mdos-tv-bar) + 12px)!important;max-height:calc(100vh - var(--mdos-tv-bar) - 28px)!important}
-                #tv{inset:0 0 var(--mdos-tv-bar)!important}
-                [data-taskbar="top"] #desk{top:0!important;bottom:var(--mdos-tv-bar)!important}
-                [data-taskbar="hidden"] #tb{transform:none!important;opacity:1!important}
-                button:focus-visible,input:focus-visible,select:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #ffc928!important;outline-offset:3px!important}
-                .win{min-width:min(290px,calc(100vw - 24px))!important;min-height:min(190px,calc(100vh - 100px))!important}
-              `;
+              const style=document.createElement('style');style.id='mdos-tv-layout';
+              style.textContent=[
+                'html,body{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;margin:0!important}',
+                'body{font-size:clamp(14px,1.05vw,19px)!important}',
+                '#desk{position:fixed!important;inset:0 0 clamp(64px,7vh,82px) 0!important;width:100vw!important;height:auto!important;overflow:hidden!important}',
+                '#tb{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:clamp(64px,7vh,82px)!important;min-height:clamp(64px,7vh,82px)!important;max-height:clamp(64px,7vh,82px)!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;align-items:center!important;direction:ltr!important;padding:0 clamp(12px,2vw,30px)!important;box-sizing:border-box!important;z-index:99999!important}',
+                '#weatherSlot{grid-column:1!important;justify-self:start!important;direction:rtl!important;min-width:0!important;max-width:25vw!important;overflow:hidden!important}',
+                '#cen{grid-column:2!important;justify-self:center!important;min-width:0!important;max-width:48vw!important;display:flex!important;align-items:center!important;gap:clamp(3px,.5vw,9px)!important;overflow:hidden!important}',
+                '#tray{grid-column:3!important;justify-self:end!important;direction:rtl!important;display:flex!important;align-items:center!important;gap:clamp(6px,1vw,16px)!important;min-width:0!important;max-width:30vw!important;overflow:hidden!important}',
+                '#weatherBtn{max-width:100%!important;white-space:nowrap!important;font-size:clamp(11px,.85vw,15px)!important}',
+                '#tray span,#clk{font-size:clamp(11px,.85vw,15px)!important}',
+                '#st{width:clamp(42px,3.7vw,56px)!important;height:clamp(42px,5vh,58px)!important;flex:none!important}',
+                '#st img{width:clamp(28px,2.5vw,38px)!important;height:clamp(28px,2.5vw,38px)!important}',
+                '#tasks{max-width:34vw!important;overflow:hidden!important;display:flex!important;gap:clamp(2px,.35vw,7px)!important}',
+                '.tk{width:clamp(34px,3vw,46px)!important;height:clamp(38px,4.5vh,52px)!important;font-size:clamp(17px,1.5vw,24px)!important;flex:none!important}',
+                '#ic{position:absolute!important;top:clamp(12px,1.5vh,22px)!important;right:clamp(14px,1.8vw,30px)!important;left:auto!important;bottom:clamp(8px,1vh,14px)!important;height:auto!important;display:grid!important;grid-auto-flow:column!important;grid-template-rows:repeat(5,minmax(88px,10vh))!important;grid-auto-columns:clamp(90px,7.8vw,128px)!important;gap:clamp(4px,.5vw,9px)!important;align-content:start!important;justify-content:start!important}',
+                '.ico{width:clamp(86px,7.3vw,118px)!important;height:clamp(86px,9.5vh,112px)!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;padding:5px!important;font-size:clamp(12px,.9vw,16px)!important;white-space:normal!important}',
+                '.ico b{font-size:clamp(30px,2.8vw,46px)!important;line-height:1.2!important}',
+                '.ico span{max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;text-align:center!important}',
+                '.win:not(.mx){width:min(72vw,1280px)!important;height:min(72vh,900px)!important;max-width:calc(100vw - 48px)!important;max-height:calc(100vh - 110px)!important}',
+                '#sm,#qs,#searchPanel,#weatherPanel{bottom:calc(clamp(64px,7vh,82px) + 10px)!important;max-height:calc(100vh - 110px)!important}',
+                '#tv{inset:0 0 clamp(64px,7vh,82px) 0!important}',
+                '#firstRun{padding:clamp(12px,3vh,28px)!important;overflow-y:auto!important;align-items:center!important;justify-content:center!important}',
+                '.fr-card{width:min(760px,82vw)!important;max-height:calc(100vh - 36px)!important;min-height:0!important;overflow-y:auto!important;padding:clamp(20px,3vh,38px)!important}',
+                '.fr-input{font-size:16px!important;min-height:46px!important}',
+                '#bt,#lk{inset:0!important;width:100vw!important;height:100vh!important}',
+                '.win{min-width:min(320px,calc(100vw - 32px))!important;min-height:min(200px,calc(100vh - 100px))!important}',
+                'button:focus-visible,input:focus-visible,select:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #ffc928!important;outline-offset:3px!important}'
+              ].join('');
               document.head.appendChild(style);
               document.documentElement.dataset.taskbar='bottom';
               document.documentElement.dataset.scale='100';
-              const getVisible=()=>Array.from(document.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]')).filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');
+            })();
+        """.trimIndent()
+        web.evaluateJavascript(script, null)
+    }
+
+    /** DPAD support for the existing M-DOS setup wizard and desktop. */
+    private fun installTelevisionNavigation() {
+        val script = """
+            (function(){
+              if(window.__mdosTvNavigationReady)return;
+              window.__mdosTvNavigationReady=true;
+              const visible=e=>!!(e&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden'&&!e.disabled);
+              const focusInitial=()=>{
+                const first=document.querySelector('#firstRun.show');
+                const scope=first||document.querySelector('#sm.open')||document.querySelector('#qs.open')||document.querySelector('#searchPanel.open')||document;
+                const list=Array.from(scope.querySelectorAll('button,input,select,[tabindex="0"]')).filter(visible);
+                if(list.length)list[0].focus();
+                else {const icon=document.querySelector('#ic .ico');if(icon)icon.focus();else document.querySelector('#st')?.focus();}
+              };
+              const firstRun=document.getElementById('firstRun');
+              if(firstRun){
+                new MutationObserver(()=>setTimeout(focusInitial,80)).observe(firstRun,{attributes:true,attributeFilter:['class']});
+                firstRun.addEventListener('click',()=>setTimeout(()=>{if(firstRun.classList.contains('show'))focusInitial()},100),true);
+              }
               document.addEventListener('keydown',function(e){
-                if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
-                const items=getVisible();if(!items.length)return;
-                let i=items.indexOf(document.activeElement);if(i<0)i=0;
-                const step=(e.key==='ArrowLeft'||e.key==='ArrowUp')?-1:1;
-                items[(i+step+items.length)%items.length].focus();e.preventDefault();
-              },true);
-              document.addEventListener('keydown',function(e){
-                if(e.key==='Enter'&&document.activeElement&&document.activeElement.tagName==='BUTTON'){
-                  document.activeElement.click();e.preventDefault();
+                if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+                  const active=document.activeElement;
+                  if(active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA')&&(e.key==='ArrowLeft'||e.key==='ArrowRight'))return;
+                  const first=document.querySelector('#firstRun.show');
+                  const scope=first||document.querySelector('#sm.open')||document.querySelector('#qs.open')||document.querySelector('#searchPanel.open')||document;
+                  const list=Array.from(scope.querySelectorAll('button,input,select,[tabindex="0"]')).filter(visible);
+                  if(!list.length)return;
+                  if(!list.includes(active)){list[0].focus();e.preventDefault();return;}
+                  const a=active.getBoundingClientRect(),ax=a.left+a.width/2,ay=a.top+a.height/2;
+                  const opts=list.filter(x=>x!==active).map(x=>{
+                    const r=x.getBoundingClientRect(),dx=r.left+r.width/2-ax,dy=r.top+r.height/2-ay;
+                    const primary=e.key==='ArrowLeft'?-dx:e.key==='ArrowRight'?dx:e.key==='ArrowUp'?-dy:dy;
+                    const secondary=(e.key==='ArrowLeft'||e.key==='ArrowRight')?Math.abs(dy):Math.abs(dx);
+                    return {x,score:primary>0?primary+secondary*2:Infinity};
+                  }).filter(x=>Number.isFinite(x.score)).sort((x,y)=>x.score-y.score);
+                  (opts[0]?.x||list[(list.indexOf(active)+1)%list.length]).focus();
+                  e.preventDefault();return;
+                }
+                if(e.key==='Enter'&&document.activeElement&&document.activeElement.tagName==='BUTTON'){document.activeElement.click();e.preventDefault();return;}
+                if(e.key==='Escape'||e.keyCode===4){
+                  if(firstRun?.classList.contains('show'))return;
+                  const close=document.querySelector('.win.act .cb.x');
+                  if(close){close.click();e.preventDefault();return;}
+                  ['sm','qs','cm','searchPanel','tv'].forEach(id=>document.getElementById(id)?.classList.remove('open'));
                 }
               },true);
+              setTimeout(focusInitial,9000);
             })();
         """.trimIndent()
         web.evaluateJavascript(script, null)
