@@ -110,8 +110,8 @@ class PhoneLinkServer(
             serviceName = "M-DOS DeX"
             serviceType = SERVICE_TYPE
             port = PORT
-            try { setAttribute("id", deviceId.toByteArray(StandardCharsets.UTF_8)) } catch (_: Exception) { }
-            try { setAttribute("ver", "2".toByteArray(StandardCharsets.UTF_8)) } catch (_: Exception) { }
+            try { setAttribute("id", deviceId) } catch (_: Exception) { }
+            try { setAttribute("ver", "2") } catch (_: Exception) { }
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) { nsdRegistered = true }

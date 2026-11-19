@@ -1,5 +1,7 @@
 # M-DOS DeX — Wi-Fi Link Edition
 
+این نسخه شامل اصلاح خطای کامپایل NSD است: `NsdServiceInfo.setAttribute` باید مقدار String بگیرد، نه ByteArray.
+
 این patch برای مخزن موجود `mehrabmasahi-hue/M-DOS-DeX` است. فایل‌ها را از ریشهٔ ZIP روی ریشهٔ مخزن استخراج کنید و فایل‌های هم‌نام را جایگزین کنید.
 
 ## نصب patch در Termux
@@ -12,7 +14,7 @@ unzip -o /sdcard/Download/M-DOS-DeX-WiFi-Pairing-Patch.zip -d .
 rm -f app/src/phone/java/com/goldan/mdosdex/CompanionActivity.kt app/src/phone/java/com/goldan/mdosdex/MdosCaptureActivity.kt
 git status --short
 git add -A
-git commit -m "Replace QR with persistent Wi-Fi pairing"
+git commit -m "Fix Wi-Fi pairing build and NSD attributes"
 git push origin main
 ```
 
