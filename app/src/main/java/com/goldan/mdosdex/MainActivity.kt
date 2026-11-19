@@ -48,7 +48,7 @@ class MainActivity : Activity() {
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             addJavascriptInterface(PhoneLinkBridge(linkServer) { address ->
                 mainHandler.post {
-                    startActivity(Intent(this, MdosBrowserActivity::class.java)
+                    startActivity(Intent(this@MainActivity, MdosBrowserActivity::class.java)
                         .putExtra(MdosBrowserActivity.EXTRA_URL, address))
                 }
             }, "PhoneLinkNative")

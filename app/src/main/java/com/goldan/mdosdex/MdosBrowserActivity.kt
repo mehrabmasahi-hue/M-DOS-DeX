@@ -52,7 +52,7 @@ class MdosBrowserActivity : Activity() {
         val forward = toolButton("›") { if (browser.canGoForward()) browser.goForward() }
         val reload = toolButton("⟳") { browser.reload() }
         address = EditText(this).apply {
-            hint = "نشانی سایت یا جستجو در Google"; textSize = 14f; singleLine = true
+            hint = "نشانی سایت یا جستجو در Google"; textSize = 14f; setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO; setTextColor(Color.WHITE); setHintTextColor(0xFFBAC5D3.toInt())
             background = rounded(Color.rgb(36, 52, 74), 10); setPadding(dp(10), dp(7), dp(10), dp(7))

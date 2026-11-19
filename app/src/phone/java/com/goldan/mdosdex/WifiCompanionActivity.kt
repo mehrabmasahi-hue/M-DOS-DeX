@@ -390,7 +390,7 @@ class WifiCompanionActivity : Activity() {
             isFillViewport = true
             isSmoothScrollingEnabled = true
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(content, ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         root!!.addView(contentScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(6), dp(6), dp(6), dp(6)); setBackgroundColor(panel) }
