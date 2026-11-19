@@ -73,7 +73,7 @@ class MainActivity : Activity() {
 
 
     private fun applyTelevisionLayout() {
-        val script = \"\"\"
+        val script = """
             (function(){
               if(document.getElementById('mdos-tv-layout')) return;
               const style=document.createElement('style');
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
                 }
               },true);
             })();
-        \"\"\".trimIndent()
+        """.trimIndent()
         web.evaluateJavascript(script, null)
     }
 
