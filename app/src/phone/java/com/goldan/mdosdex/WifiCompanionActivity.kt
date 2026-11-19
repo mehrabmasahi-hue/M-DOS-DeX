@@ -506,38 +506,55 @@ class WifiCompanionActivity : Activity() {
 
     private inner class TouchPadView : View(this@WifiCompanionActivity) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private var downX = 0f
-        private var downY = 0f
+        private var lastX = 0f
+        private var lastY = 0f
         private var moved = false
-        private var downAt = 0L
+        private var multiTouch = false
+        private fun centerY(event: MotionEvent): Float {
+            var total = 0f
+            for (i in 0 until event.pointerCount) total += event.getY(i)
+            return total / event.pointerCount.coerceAtLeast(1)
+        }
         init { isClickable = true; background = rounded(0xFF24344A.toInt(), 18) }
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             paint.color = 0xFF7187A3.toInt(); paint.textSize = dp(15).toFloat(); paint.textAlign = Paint.Align.CENTER
-            canvas.drawText("صفحه کنترل ماوس", width / 2f, height / 2f - dp(5), paint)
+            canvas.drawText("یک انگشت: حرکت و کلیک چپ", width / 2f, height / 2f - dp(5), paint)
             paint.color = 0xFF9CAFC4.toInt(); paint.textSize = dp(11).toFloat()
-            canvas.drawText("TOUCH PAD", width / 2f, height / 2f + dp(20), paint)
+            canvas.drawText("دو انگشت: پیمایش بالا و پایین", width / 2f, height / 2f + dp(20), paint)
         }
         override fun onTouchEvent(event: MotionEvent): Boolean {
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y; moved = false; downAt = System.currentTimeMillis(); return true }
-                MotionEvent.ACTION_POINTER_DOWN -> { moved = true; return true }
+                MotionEvent.ACTION_DOWN -> {
+                    lastX=event.x; lastY=event.y; moved=false; multiTouch=false
+                    return true
+                }
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    multiTouch=true; moved=true; lastY=centerY(event)
+                    return true
+                }
                 MotionEvent.ACTION_MOVE -> {
-                    if (event.pointerCount >= 2) {
-                        val dy = (event.y - downY) * 5f; downY = event.y
-                        sendInput(JSONObject().put("type", "scroll").put("dy", dy)); moved = true
-                    } else {
-                        val dx = event.x - downX; val dy = event.y - downY
-                        if (abs(dx) + abs(dy) > 1f) moved = true
-                        if (abs(dx) + abs(dy) > 0.25f) {
-                            sendInput(JSONObject().put("type", "move").put("dx", dx * mouseSpeed).put("dy", dy * mouseSpeed))
+                    if (multiTouch || event.pointerCount>=2) {
+                        multiTouch=true
+                        val cy=centerY(event); val delta=cy-lastY
+                        if (abs(delta)>0.5f) {
+                            sendInput(JSONObject().put("type","scroll").put("dy",-delta*7f))
+                            moved=true
                         }
-                        downX = event.x; downY = event.y
+                        lastY=cy
+                    } else {
+                        val dx=event.x-lastX; val dy=event.y-lastY
+                        if (abs(dx)+abs(dy)>2f) moved=true
+                        if (abs(dx)+abs(dy)>0.25f)
+                            sendInput(JSONObject().put("type","move").put("dx",dx*mouseSpeed).put("dy",dy*mouseSpeed))
+                        lastX=event.x; lastY=event.y
                     }
                     return true
                 }
-                MotionEvent.ACTION_UP -> {
-                    if (!moved) sendInput(JSONObject().put("type", if (System.currentTimeMillis() - downAt > 550) "right" else "tap"))
+                MotionEvent.ACTION_POINTER_UP -> { multiTouch=true; moved=true; return true }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (event.actionMasked==MotionEvent.ACTION_UP && !moved && !multiTouch)
+                        sendInput(JSONObject().put("type","tap"))
                     performClick(); return true
                 }
             }
