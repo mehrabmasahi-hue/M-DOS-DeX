@@ -100,7 +100,7 @@ class MainActivity : Activity() {
                 '#st img{width:clamp(28px,2.5vw,38px)!important;height:clamp(28px,2.5vw,38px)!important}',
                 '#tasks{max-width:34vw!important;overflow:hidden!important;display:flex!important;gap:clamp(2px,.35vw,7px)!important}',
                 '.tk{width:clamp(34px,3vw,46px)!important;height:clamp(38px,4.5vh,52px)!important;font-size:clamp(17px,1.5vw,24px)!important;flex:none!important}',
-                '#ic{position:absolute!important;top:clamp(12px,1.5vh,22px)!important;right:clamp(14px,1.8vw,30px)!important;left:auto!important;bottom:clamp(8px,1vh,14px)!important;height:auto!important;display:grid!important;grid-auto-flow:column!important;grid-template-rows:repeat(5,minmax(88px,10vh))!important;grid-auto-columns:clamp(90px,7.8vw,128px)!important;gap:clamp(4px,.5vw,9px)!important;align-content:start!important;justify-content:start!important}',
+                '#ic{display:grid!important;visibility:visible!important;opacity:1!important;position:absolute!important;z-index:20!important;top:clamp(12px,1.5vh,22px)!important;right:clamp(14px,1.8vw,30px)!important;left:auto!important;bottom:clamp(8px,1vh,14px)!important;height:auto!important;display:grid!important;grid-auto-flow:column!important;grid-template-rows:repeat(5,minmax(88px,10vh))!important;grid-auto-columns:clamp(90px,7.8vw,128px)!important;gap:clamp(4px,.5vw,9px)!important;align-content:start!important;justify-content:start!important}',
                 '.ico{width:clamp(86px,7.3vw,118px)!important;height:clamp(86px,9.5vh,112px)!important;min-height:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;padding:5px!important;font-size:clamp(12px,.9vw,16px)!important;white-space:normal!important}',
                 '.ico b{font-size:clamp(30px,2.8vw,46px)!important;line-height:1.2!important}',
                 '.ico span{max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;text-align:center!important}',
@@ -115,6 +115,15 @@ class MainActivity : Activity() {
                 'button:focus-visible,input:focus-visible,select:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #ffc928!important;outline-offset:3px!important}'
               ].join('');
               document.head.appendChild(style);
+              try{
+                const pref=JSON.parse(localStorage.getItem('mdosPrefs')||'{}');
+                pref.showIcons=true;
+                localStorage.setItem('mdosPrefs',JSON.stringify(pref));
+                document.documentElement.dataset.desktopIcons='on';
+                if(typeof applyPrefs==='function')applyPrefs();
+                document.documentElement.dataset.desktopIcons='on';
+                if(typeof build==='function')build();
+              }catch(e){console.error('M-DOS TV desktop recovery',e);}
               document.documentElement.dataset.taskbar='bottom';
               document.documentElement.dataset.scale='100';
             })();
