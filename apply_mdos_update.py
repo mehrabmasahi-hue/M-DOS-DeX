@@ -23,6 +23,10 @@ def write(rel, value):
 
 def replace_once(source, old, new, label):
     count = source.count(old)
+    if label == 'mouse cursor position':
+        if count < 1:
+            raise SystemExit(f'Patch stopped: no match for {label}.')
+        return source.replace(old, new)
     if count != 1:
         raise SystemExit(f'Patch stopped: expected one match for {label}, found {count}. No partial write was made.')
     return source.replace(old, new, 1)

@@ -430,26 +430,34 @@ function store(el){const q=h('input','in'),l=h('div');q.placeholder='جستجو 
   b.onclick=()=>{if(has){inst=inst.filter(x=>x!=k);Object.keys(wins).filter(w=>wins[w].app==k).forEach(shut)}else inst.push(k);S('minst',inst);build();draw();toast('M-Repo',(has?'حذف شد: ':'نصب شد: ')+t.n)};r.append(b);l.append(r)})};
  q.oninput=draw;draw()}
 
-function web(el,k,arg){el.style.cssText+='display:flex;flex-direction:column;padding:0';
- const tabs=[],tbar=h('div','tbar'),bar=h('div','row'),u=h('input','in'),box=h('div'),hm=h('div');let cur=null;
- box.style.cssText='flex:1;position:relative;min-height:0';hm.style.cssText='position:absolute;inset:0;overflow:auto;padding:14px;background:var(--pn2)';bar.style.padding='0 6px';
- const url=s=>{s=(s||'').trim();if(!s||s=='home')return'home';if(/^https?:\/\//i.test(s))return s;return/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s)?'https://'+s:'https://fa.wikipedia.org/w/index.php?search='+encodeURIComponent(s)};
- const draw=()=>{tbar.innerHTML='';tabs.forEach(t=>{const c=t.hs[t.ix],b=h('button','tab'+(t==cur?' on':''),'<span>'+esc(c=='home'?'تب جدید':c.replace(/^https?:\/\//,'').slice(0,18))+'</span><i>✕</i>');
-  b.onclick=e=>{if(e.target.tagName=='I'){t.fr.remove();tabs.splice(tabs.indexOf(t),1);if(!tabs.length)return nt();if(cur==t)cur=tabs[tabs.length-1];show()}else{cur=t;show()}};tbar.append(b)});
-  const p=h('button','tab','＋');p.onclick=()=>nt();tbar.append(p)};
- const show=()=>{const c=cur.hs[cur.ix];tabs.forEach(t=>t.fr.style.display=t==cur&&c!='home'?'block':'none');hm.style.display=c=='home'?'block':'none';u.value=c=='home'?'':c;draw()};
- const go=s=>{const t=url(s);cur.hs=cur.hs.slice(0,cur.ix+1);cur.hs.push(t);cur.ix++;if(t!='home')cur.fr.src=t;show()};
- const mv=d=>{const n=cur.ix+d;if(n<0||n>=cur.hs.length)return;cur.ix=n;if(cur.hs[n]!='home')cur.fr.src=cur.hs[n];show()};
- const nt=s=>{const fr=h('iframe');fr.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;display:none';fr.sandbox='allow-scripts allow-forms allow-same-origin allow-popups';box.append(fr);
-  cur={hs:[url(s)],ix:0,fr};tabs.push(cur);if(cur.hs[0]!='home')fr.src=cur.hs[0];show()};
- const B=(t,f)=>{const b=h('button','btn s',t);b.onclick=f;bar.append(b)};
- B('→',()=>mv(-1));B('←',()=>mv(1));B('⟳',()=>{if(cur.hs[cur.ix]!='home')cur.fr.src=cur.hs[cur.ix]});
- u.style.cssText='flex:1;min-width:120px;width:auto;direction:ltr;border-radius:20px';u.placeholder='آدرس یا عبارت جستجو';u.onkeydown=e=>{if(e.key=='Enter')go(u.value)};bar.append(u);
- B('🏠',()=>go('home'));B('↗',()=>window.open(cur.hs[cur.ix]!='home'?cur.hs[cur.ix]:'https://fa.wikipedia.org','_blank'));
- hm.innerHTML='<h2>مرورگر M-DOS</h2><p class="mu">آدرس یا عبارت جستجو را در نوار بالا بنویس (جستجو در ویکی‌پدیا انجام می‌شود). بعضی سایت‌ها نمایش داخل قاب را مسدود می‌کنند؛ آن‌ها را با ↗ در تب واقعی کروم باز کن.</p>';
- [['ویکی‌پدیا','fa.wikipedia.org'],['OWASP','owasp.org'],['NVD (CVE)','nvd.nist.gov'],['MDN','developer.mozilla.org']].forEach(([n,a])=>{const b=h('button','btn',n);b.style.margin='4px';b.onclick=()=>go(a);hm.append(b)});
- box.append(hm);el.append(tbar,bar,box);nt(arg)}
-
+function web(el,k,arg){
+ el.style.cssText+=';display:flex;flex-direction:column;gap:10px;padding:12px;overflow:auto';
+ const head=h('div','card','<b class="big">🌐</b><div><b>مرورگر M-DOS</b><br><span class="mu">مرورگر داخلی Android WebView · موتور جستجوی پیش‌فرض: Google</span></div>');
+ const note=h('p','mu','نشانی سایت یا عبارت جستجو را وارد کن. صفحات در WebView داخلی Android باز می‌شوند و به iframe محدود نیستند.');
+ const bar=h('div','row');bar.style.cssText='display:flex;gap:7px;align-items:center';
+ const input=h('input','in');input.type='text';input.dir='ltr';input.autocomplete='url';input.placeholder='https://example.com یا جستجو در Google';input.style.cssText='flex:1;min-width:0;width:auto';
+ const open=s=>{
+  const value=String(s||'').trim();if(!value)return;
+  if(window.PhoneLinkNative&&typeof window.PhoneLinkNative.openBrowser==='function')window.PhoneLinkNative.openBrowser(value);
+  else{
+   const isUrl=/^(https?:\/\/)/i.test(value)||(/^[\w.-]+\.[a-z]{2,}(\/[^\s]*)?$/i.test(value));
+   window.open(isUrl?(/^https?:\/\//i.test(value)?value:'https://'+value):'https://www.google.com/search?q='+encodeURIComponent(value),'_blank');
+  }
+ };
+ const go=h('button','btn','برو');go.onclick=()=>open(input.value);
+ input.onkeydown=e=>{if(e.key==='Enter'){open(input.value);e.preventDefault()}};
+ bar.append(input,go);
+ const home=h('div','card');home.style.cssText+=';display:block';
+ const quick=h('div','row');
+ [['Google','https://www.google.com'],['YouTube','https://www.youtube.com'],['Wikipedia','https://www.wikipedia.org'],['GitHub','https://github.com'],['MDN','https://developer.mozilla.org'],['OWASP','https://owasp.org']].forEach(([name,url])=>{
+  const b=h('button','btn s',name);b.onclick=()=>open(url);quick.append(b);
+ });
+ const google=h('button','btn','🔎 جستجوی Google');google.onclick=()=>open(input.value||'https://www.google.com');
+ const googleHome=h('button','btn s','صفحه اصلی Google');googleHome.onclick=()=>open('https://www.google.com');
+ home.append(h('h3','','شروع وب‌گردی'),h('p','mu','جستجوها به‌صورت پیش‌فرض در Google انجام می‌شوند.'),quick,google,googleHome);
+ el.append(head,note,bar,home);
+ if(arg){input.value=String(arg);setTimeout(()=>open(arg),120)}else setTimeout(()=>input.focus(),50);
+}
 async function sec(el){
  el.innerHTML='';
  const head=h('div','card','<b class="big">🛡️</b><div><b>M-DOS Defender</b><br><span class="mu">محافظ داخلی M-DOS · بدون درخواست مجوز</span></div>');el.append(head);

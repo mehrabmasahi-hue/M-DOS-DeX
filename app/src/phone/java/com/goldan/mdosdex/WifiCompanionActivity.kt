@@ -63,6 +63,11 @@ class WifiCompanionActivity : Activity() {
     private var currentTab = "mouse"
     private var pendingPicker = "file"
     private var lastMoveAt = 0L
+    private var mouseSpeed = 1.85f
+    private val moveLock = Any()
+    private var queuedMoveX = 0.0
+    private var queuedMoveY = 0.0
+    private var movePumpActive = false
     private var autoConnectTried = false
     private val found = linkedMapOf<String, Device>()
     private val resolving = mutableSetOf<String>()
@@ -381,7 +386,13 @@ class WifiCompanionActivity : Activity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)).apply { topMargin = dp(8) })
         root!!.addView(header)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(8)) }
-        root!!.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        val contentScroll = ScrollView(this).apply {
+            isFillViewport = true
+            isSmoothScrollingEnabled = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(content, ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        root!!.addView(contentScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(6), dp(6), dp(6), dp(6)); setBackgroundColor(panel) }
         listOf("mouse" to "ماوس", "apps" to "برنامه‌ها", "files" to "فایل‌ها", "control" to "کنترل").forEach { (id, title) ->
             nav.addView(button(title, if (currentTab == id) yellow else panel) { currentTab = id; renderTab() },
@@ -409,7 +420,7 @@ class WifiCompanionActivity : Activity() {
             .apply { setPadding(0, dp(4), 0, dp(10)) })
         content.addView(button("⛶ تاچ‌پد تمام‌صفحه", panel) { showFullScreenPad() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { bottomMargin = dp(8) })
-        content.addView(TouchPadView(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(TouchPadView(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)))
         val clicks = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         clicks.addView(button("کلیک چپ", yellow) { sendInput(JSONObject().put("type", "tap")) }, LinearLayout.LayoutParams(0, dp(46), 1f))
         clicks.addView(button("کلیک راست", panel) { sendInput(JSONObject().put("type", "right")) }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
@@ -418,7 +429,24 @@ class WifiCompanionActivity : Activity() {
         drag.addView(button("شروع کشیدن", panel) { sendInput(JSONObject().put("type", "down")) }, LinearLayout.LayoutParams(0, dp(40), 1f))
         drag.addView(button("رها کردن", panel) { sendInput(JSONObject().put("type", "up")) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { leftMargin = dp(8) })
         content.addView(drag, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)).apply { topMargin = dp(7) })
+        val extras = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val clickRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        clickRow.addView(button("کلیک وسط", panel) { sendInput(JSONObject().put("type", "middle")) }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        clickRow.addView(button("دوبار کلیک", panel) { sendInput(JSONObject().put("type", "double")) }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(7) })
+        extras.addView(clickRow)
+        val scrollRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        scrollRow.addView(button("▲ پیمایش بالا", panel) { sendInput(JSONObject().put("type", "scroll").put("dy", -420)) }, LinearLayout.LayoutParams(0, dp(42), 1f))
+        scrollRow.addView(button("▼ پیمایش پایین", panel) { sendInput(JSONObject().put("type", "scroll").put("dy", 420)) }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(7) })
+        extras.addView(scrollRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(7) })
+        val speedRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        speedRow.addView(label("سرعت نشانگر", 12f, muted), LinearLayout.LayoutParams(0, dp(42), 1f))
+        speedRow.addView(button("−", panel) { mouseSpeed = (mouseSpeed - 0.25f).coerceAtLeast(0.75f); toastSpeed() }, LinearLayout.LayoutParams(dp(52), dp(40)))
+        speedRow.addView(button("+", panel) { mouseSpeed = (mouseSpeed + 0.25f).coerceAtMost(3.5f); toastSpeed() }, LinearLayout.LayoutParams(dp(52), dp(40)).apply { leftMargin = dp(6) })
+        extras.addView(speedRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(7) })
+        content.addView(extras, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
     }
+
+    private fun toastSpeed() = Toast.makeText(this, "سرعت ماوس: " + mouseSpeed + "×", Toast.LENGTH_SHORT).show()
 
     private fun showFullScreenPad() {
         val frame = FrameLayout(this).apply { setBackgroundColor(navy) }
@@ -456,10 +484,8 @@ class WifiCompanionActivity : Activity() {
                     } else {
                         val dx = event.x - downX; val dy = event.y - downY
                         if (abs(dx) + abs(dy) > 1f) moved = true
-                        val now = System.currentTimeMillis()
-                        if (now - lastMoveAt > 22) {
-                            sendInput(JSONObject().put("type", "move").put("dx", dx * 1.85f).put("dy", dy * 1.85f))
-                            lastMoveAt = now
+                        if (abs(dx) + abs(dy) > 0.25f) {
+                            sendInput(JSONObject().put("type", "move").put("dx", dx * mouseSpeed).put("dy", dy * mouseSpeed))
                         }
                         downX = event.x; downY = event.y
                     }
@@ -482,8 +508,7 @@ class WifiCompanionActivity : Activity() {
         content.addView(title)
         content.addView(label("فقط فایل‌های .llmpk منتقل می‌شوند؛ نصب و اجرا در خود M-DOS انجام می‌شود.", 11f, muted).apply { setPadding(0, dp(8), 0, dp(10)) })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val scroll = ScrollView(this).apply { addView(list) }
-        content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         io.execute {
             val apps = try { requestArray("GET", "/apps") } catch (_: Exception) { JSONArray() }
             runOnUiThread {
@@ -510,7 +535,7 @@ class WifiCompanionActivity : Activity() {
         content.addView(rowButtons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(7) })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(label("فایل‌های منتقل‌شده", 14f, textColor, true).apply { setPadding(0, dp(14), 0, dp(7)) })
-        content.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         io.execute {
             val files = try { requestArray("GET", "/files") } catch (_: Exception) { JSONArray() }
             runOnUiThread {
@@ -542,15 +567,80 @@ class WifiCompanionActivity : Activity() {
         keyRow("↑" to "ArrowUp", "↓" to "ArrowDown", "←" to "ArrowLeft", "→" to "ArrowRight")
         keyRow("Home" to "Home", "End" to "End", "PgUp" to "PageUp", "PgDn" to "PageDown")
         content.addView(grid)
+
         val entry = EditText(this).apply {
             hint = "متن یا فرمان را وارد کن"; setHintTextColor(muted); setTextColor(textColor); textSize = 14f
-            setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_SEND; background = rounded(panel, 12); setPadding(dp(12), dp(8), dp(12), dp(8))
+            minLines = 2; maxLines = 4; imeOptions = EditorInfo.IME_ACTION_SEND
+            background = rounded(panel, 12); setPadding(dp(12), dp(8), dp(12), dp(8))
         }
-        fun sendText() { val value = entry.text.toString(); if (value.isNotEmpty()) { sendInput(JSONObject().put("type", "text").put("text", value)); entry.setText("") } }
-        entry.setOnEditorActionListener { _, actionId, _ -> if (actionId == EditorInfo.IME_ACTION_SEND) { sendText(); true } else false }
-        content.addView(entry, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
-        content.addView(button("ارسال متن", yellow) { sendText() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(7) })
-        content.addView(button("بازگشت به ماوس", panel) { currentTab = "mouse"; renderTab() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(12) })
+        fun sendText() {
+            val value = entry.text.toString()
+            if (value.isNotEmpty()) { sendInput(JSONObject().put("type", "text").put("text", value)); entry.setText("") }
+        }
+        entry.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEND) { sendText(); true } else false
+        }
+        content.addView(entry, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(76)).apply { topMargin = dp(10) })
+
+        var persian = true
+        var buildKeyboard: (() -> Unit)? = null
+        val keyboardHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        keyboardHeader.addView(label("صفحه‌کلید داخلی", 14f, textColor, true), LinearLayout.LayoutParams(0, dp(42), 1f))
+        keyboardHeader.addView(button("فارسی  |  English", yellow) { persian = !persian; buildKeyboard?.invoke() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)))
+        content.addView(keyboardHeader, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(8) })
+        val keyboardRows = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(3), dp(5), dp(3), dp(5)); background = rounded(0xFF172337.toInt(), 12)
+        }
+        content.addView(keyboardRows, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        fun insertKey(value: String) {
+            val startPos = entry.selectionStart.coerceAtLeast(0)
+            val endPos = entry.selectionEnd.coerceAtLeast(startPos)
+            when (value) {
+                "⌫" -> {
+                    val from = if (startPos == endPos && startPos > 0) startPos - 1 else minOf(startPos, endPos)
+                    val to = maxOf(startPos, endPos)
+                    if (to > from) entry.text.delete(from, to)
+                    entry.setSelection(from)
+                }
+                "↵" -> sendText()
+                else -> {
+                    entry.text.replace(minOf(startPos, endPos), maxOf(startPos, endPos), value)
+                    entry.setSelection(minOf(startPos, endPos) + value.length)
+                }
+            }
+        }
+        buildKeyboard = {
+            keyboardRows.removeAllViews()
+            val chars = if (persian) listOf("۱۲۳۴۵۶۷۸۹۰", "ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطزرذدپو")
+                else listOf("1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm")
+            chars.forEach { line ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                line.forEach { ch ->
+                    val key = TextView(this).apply {
+                        text = ch.toString(); gravity = Gravity.CENTER; textSize = 13f; setTextColor(textColor)
+                        background = rounded(panel, 7); minWidth = 0; setPadding(0, dp(4), 0, dp(4))
+                        setOnClickListener { insertKey(ch.toString()) }
+                    }
+                    row.addView(key, LinearLayout.LayoutParams(0, dp(39), 1f).apply {
+                        leftMargin = dp(2); rightMargin = dp(2); bottomMargin = dp(4)
+                    })
+                }
+                keyboardRows.addView(row)
+            }
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            listOf("⌫" to "حذف", " " to "فاصله", "↵" to "ارسال").forEach { (keyValue, caption) ->
+                actions.addView(button(caption, if (caption == "ارسال") yellow else panel) { insertKey(keyValue) },
+                    LinearLayout.LayoutParams(0, dp(42), if (caption == "فاصله") 2f else 1f).apply { leftMargin = dp(2); rightMargin = dp(2) })
+            }
+            keyboardRows.addView(actions)
+        }
+        buildKeyboard?.invoke()
+        content.addView(button("ارسال متن به M-DOS", yellow) { sendText() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
+        content.addView(button("بازگشت به ماوس", panel) { currentTab = "mouse"; renderTab() },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(12) })
     }
 
     private fun pickFile(kind: String) {
@@ -617,6 +707,35 @@ class WifiCompanionActivity : Activity() {
     }
 
     private fun sendInput(data: JSONObject) {
+        if (data.optString("type") == "move") {
+            var startWorker = false
+            synchronized(moveLock) {
+                queuedMoveX += data.optDouble("dx", 0.0)
+                queuedMoveY += data.optDouble("dy", 0.0)
+                if (!movePumpActive) { movePumpActive = true; startWorker = true }
+            }
+            if (startWorker) io.execute {
+                while (true) {
+                    val payload = synchronized(moveLock) {
+                        if (kotlin.math.abs(queuedMoveX) + kotlin.math.abs(queuedMoveY) < 0.01) {
+                            movePumpActive = false
+                            null
+                        } else {
+                            val x = queuedMoveX; val y = queuedMoveY
+                            queuedMoveX = 0.0; queuedMoveY = 0.0
+                            JSONObject().put("type", "move").put("dx", x).put("dy", y)
+                        }
+                    } ?: break
+                    try { request("POST", "/input", payload.toString()) } catch (_: Exception) { }
+                    try { Thread.sleep(24) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        synchronized(moveLock) { movePumpActive = false }
+                        break
+                    }
+                }
+            }
+            return
+        }
         io.execute { try { request("POST", "/input", data.toString()) } catch (_: Exception) { } }
     }
 

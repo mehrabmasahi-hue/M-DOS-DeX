@@ -1,6 +1,7 @@
 package com.goldan.mdosdex
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -45,7 +46,12 @@ class MainActivity : Activity() {
             settings.allowContentAccess = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            addJavascriptInterface(PhoneLinkBridge(linkServer), "PhoneLinkNative")
+            addJavascriptInterface(PhoneLinkBridge(linkServer) { address ->
+                mainHandler.post {
+                    startActivity(Intent(this, MdosBrowserActivity::class.java)
+                        .putExtra(MdosBrowserActivity.EXTRA_URL, address))
+                }
+            }, "PhoneLinkNative")
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
@@ -219,9 +225,9 @@ class MainActivity : Activity() {
                 Element.prototype.__mdosCapturePatched=true;
               }
               const cursor=document.createElement('div');cursor.id='mdosRemoteCursor';
-              cursor.textContent='➤';cursor.style.cssText='position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;color:#ffca28;font-size:28px;font-weight:900;line-height:1;text-shadow:0 1px 4px #000;transform:translate('+window.__mdosRemotePointer.x+'px,'+window.__mdosRemotePointer.y+'px)';
+              cursor.textContent='↖';cursor.style.cssText='position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;color:#ffca28;font-size:31px;font-weight:900;line-height:1;text-shadow:0 1px 4px #000;will-change:transform;transform:translate('+(window.__mdosRemotePointer.x-6)+'px,'+(window.__mdosRemotePointer.y-7)+'px)';
               document.documentElement.appendChild(cursor);
-              window.addEventListener('resize',()=>{const p=window.__mdosRemotePointer;p.x=Math.min(p.x,innerWidth-1);p.y=Math.min(p.y,innerHeight-1);cursor.style.transform='translate('+p.x+'px,'+p.y+'px)'});
+              window.addEventListener('resize',()=>{const p=window.__mdosRemotePointer;p.x=Math.min(p.x,innerWidth-1);p.y=Math.min(p.y,innerHeight-1);cursor.style.transform='translate('+(p.x-6)+'px,'+(p.y-7)+'px)'});
               window.MDOSRemoteInput=function(c){
                 try{
                   const p=window.__mdosRemotePointer,d=document;
@@ -234,7 +240,7 @@ class MainActivity : Activity() {
                   if(c.type==='move'){
                     p.x=Math.max(0,Math.min(innerWidth-1,p.x+(Number(c.dx)||0)));
                     p.y=Math.max(0,Math.min(innerHeight-1,p.y+(Number(c.dy)||0)));
-                    cursor.style.transform='translate('+p.x+'px,'+p.y+'px)';
+                    cursor.style.transform='translate('+(p.x-6)+'px,'+(p.y-7)+'px)';
                     const e=eventTarget();
                     if(window.PointerEvent)e.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,clientX:p.x,clientY:p.y,pointerId:1,pointerType:'mouse',isPrimary:true,buttons:window.__mdosRemoteCapture?1:0}));
                     e.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:p.x,clientY:p.y,view:window,buttons:window.__mdosRemoteCapture?1:0}));return true;
@@ -245,15 +251,22 @@ class MainActivity : Activity() {
                   if(c.type==='up'){
                     const e=eventTarget();pointer(e,'pointerup',0,0);window.__mdosRemoteCapture=null;return true;
                   }
-                  if(c.type==='tap'||c.type==='right'){
-                    const e=eventTarget(),right=c.type==='right';
+                  if(c.type==='tap'||c.type==='right'||c.type==='middle'||c.type==='double'){
+                    const e=eventTarget(),button=c.type==='right'?2:c.type==='middle'?1:0;
+                    const clickOnce=btn=>{
+                      const buttons=btn===2?2:btn===1?4:1;
+                      if(window.PointerEvent)e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,button:btn,buttons,clientX:p.x,clientY:p.y,pointerId:1,pointerType:'mouse',isPrimary:true}));
+                      e.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:btn,buttons,clientX:p.x,clientY:p.y,view:window}));
+                      if(window.PointerEvent)e.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,button:btn,buttons:0,clientX:p.x,clientY:p.y,pointerId:1,pointerType:'mouse',isPrimary:true}));
+                      e.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:btn,buttons:0,clientX:p.x,clientY:p.y,view:window}));
+                      if(btn===0)e.dispatchEvent(new MouseEvent('click',{bubbles:true,button:0,clientX:p.x,clientY:p.y,view:window}));
+                      else if(btn===1)e.dispatchEvent(new MouseEvent('auxclick',{bubbles:true,button:1,clientX:p.x,clientY:p.y,view:window}));
+                      else e.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,button:2,clientX:p.x,clientY:p.y,view:window}));
+                    };
                     e.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:p.x,clientY:p.y,view:window}));
-                    if(window.PointerEvent)e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,button:right?2:0,buttons:right?2:1,clientX:p.x,clientY:p.y,pointerId:1,pointerType:'mouse',isPrimary:true}));
-                    e.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:right?2:0,buttons:right?2:1,clientX:p.x,clientY:p.y,view:window}));
-                    if(window.PointerEvent)e.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,button:right?2:0,buttons:0,clientX:p.x,clientY:p.y,pointerId:1,pointerType:'mouse',isPrimary:true}));
-                    e.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:right?2:0,buttons:0,clientX:p.x,clientY:p.y,view:window}));
-                    if(!right)e.dispatchEvent(new MouseEvent('click',{bubbles:true,button:0,clientX:p.x,clientY:p.y,view:window}));
-                    else e.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,button:2,clientX:p.x,clientY:p.y,view:window}));return true;
+                    if(c.type==='double'){clickOnce(0);clickOnce(0);e.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,button:0,clientX:p.x,clientY:p.y,view:window}));}
+                    else clickOnce(button);
+                    return true;
                   }
                   if(c.type==='scroll'){const e=d.elementFromPoint(p.x,p.y)||d.body;e.dispatchEvent(new WheelEvent('wheel',{bubbles:true,deltaY:Number(c.dy)||0,clientX:p.x,clientY:p.y}));return true;}
                   if(c.type==='key'){
@@ -276,7 +289,7 @@ class MainActivity : Activity() {
     private fun handleRemoteInput(command: JSONObject) {
         if (!::web.isInitialized) return
         when (command.optString("type")) {
-            "move", "tap", "right", "down", "up", "scroll", "key", "text", "scroll-home" -> {
+            "move", "tap", "right", "middle", "double", "down", "up", "scroll", "key", "text", "scroll-home" -> {
                 val payload = JSONObject(command.toString()).toString()
                 web.evaluateJavascript("window.MDOSRemoteInput&&window.MDOSRemoteInput($payload);", null)
             }
