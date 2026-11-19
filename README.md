@@ -1,22 +1,59 @@
-# M-DOS DeX + Link to M-DOS
+# M-DOS DeX — Wi-Fi Link Edition
 
-This Android project builds two different applications:
+این patch برای مخزن موجود `mehrabmasahi-hue/M-DOS-DeX` است. فایل‌ها را از ریشهٔ ZIP روی ریشهٔ مخزن استخراج کنید و فایل‌های هم‌نام را جایگزین کنید.
 
-- **M-DOS DeX (TV)** — a standalone M-DOS environment. It does not need the phone app to start. The built-in **Phone Link** app displays a pairing QR code and starts a local Wi-Fi control server.
-- **Link to M-DOS (Phone)** — a separate Android companion with a yellow launcher icon, QR camera scanner, full-screen touchpad, keyboard/D-pad controls, LLMPK transfer and file transfer.
+## نصب patch در Termux
 
-## Phone Link capabilities
+ZIP را در پوشهٔ Download گوشی قرار دهید و این دستورات را اجرا کنید:
 
-- QR pairing on the same Wi-Fi network using a temporary random token.
-- Remote mouse movement, left/right click, scrolling, keyboard keys and text input.
-- Transfer LLMPK packages to M-DOS; valid packages are installed into the existing M-DOS LLMPK runtime and launched.
-- List and remove transferred LLMPK packages from the phone.
-- Send arbitrary files, photos and videos to the M-DOS app's private Phone Link storage; M-DOS can preview supported image/video formats and import smaller files into its virtual file system.
+```bash
+cd ~/M-DOS-DeX-repo
+unzip -o /sdcard/Download/M-DOS-DeX-WiFi-Pairing-Patch.zip -d .
+rm -f app/src/phone/java/com/goldan/mdosdex/CompanionActivity.kt app/src/phone/java/com/goldan/mdosdex/MdosCaptureActivity.kt
+git status --short
+git add -A
+git commit -m "Replace QR with persistent Wi-Fi pairing"
+git push origin main
+```
 
-## Current limitations
+خود ZIP را به‌عنوان یک فایل واحد به مخزن اضافه نکنید؛ محتویاتش باید در مسیرهای پروژه استخراج شود. پس از push، GitHub Actions به‌طور خودکار هر دو APK آزمایشی را می‌سازد. سپس artifact را از اجرای جدید Actions دانلود کنید.
 
-- Both devices must stay on the same local Wi-Fi network and the M-DOS TV app must remain open. This is LAN-only, not an internet remote-access service.
-- LLMPK is the M-DOS web-app package format; it does not install arbitrary Android APKs.
-- Large media files are stored in the M-DOS app's private Phone Link vault and can be previewed there. Import into the browser-based virtual file system is limited by browser storage.
-- Android permissions are requested only when required (camera at scan time; file access through Android's system document picker).
-- Debug APKs are test builds, not release-signed production packages.
+## اتصال دائمی گوشی به تلویزیون
+
+1. M-DOS DeX را روی Android TV باز کنید و برنامه داخلی **Phone Link** را اجرا کنید.
+2. گوشی و تلویزیون را به یک شبکه Wi-Fi وصل کنید.
+3. برنامه **Link to M-DOS** را روی گوشی باز کنید. برنامه تلویزیون‌های M-DOS را با Android NSD/mDNS پیدا می‌کند.
+4. تلویزیون را انتخاب کنید و کد شش‌رقمی نمایش‌داده‌شده در Phone Link را فقط یک‌بار وارد کنید.
+5. پس از جفت‌سازی، هر دو برنامه توکن و شناسهٔ دستگاه را ذخیره می‌کنند. از دفعات بعد، گوشی با پیدا کردن همان شناسه به‌طور خودکار متصل می‌شود و کد نمی‌خواهد.
+
+اگر روتر multicast/mDNS را مسدود کند، در برنامه گوشی از **اتصال دستی با IP** استفاده کنید و IP و پورت `8765` را که Phone Link روی تلویزیون نشان می‌دهد وارد کنید. در این حالت هم برنامه شناسهٔ تلویزیون را بررسی می‌کند؛ اگر همان تلویزیون قبلاً جفت شده باشد، توکن ذخیره‌شده را به‌کار می‌برد و کد دوباره نمی‌خواهد.
+
+## امکانات Link to M-DOS (گوشی)
+
+- کشف خودکار تلویزیون‌های M-DOS در شبکه محلی و اتصال مجدد خودکار به تلویزیون جفت‌شده.
+- جفت‌سازی اولیه با کد شش‌رقمی؛ بدون QR، دوربین یا مجوز دوربین.
+- تاچ‌پد معمولی و تمام‌صفحه، حرکت نشانگر، کلیک چپ و راست، نگه‌داشتن و کشیدن، اسکرول دو انگشتی.
+- صفحهٔ کنترل کلیدها: Escape، Tab، Enter، Backspace، کلیدهای جهت، Home، End، Page Up و Page Down.
+- ارسال متن از صفحه‌کلید گوشی به M-DOS.
+- ارسال هر نوع فایل، تصویر یا ویدئو به مخزن Phone Link روی تلویزیون؛ سقف انتقال هر فایل ۱۰۰ مگابایت.
+- ارسال بسته‌های `.llmpk`، مشاهدهٔ فهرست بسته‌ها و حذف آن‌ها.
+- فهرست‌کردن و حذف فایل‌های منتقل‌شده.
+
+## امکانات Phone Link (داخل تلویزیون)
+
+- M-DOS DeX بدون اتصال گوشی نیز اجرا می‌شود.
+- نمایش کد جفت‌سازی، IP محلی، پورت و تعداد گوشی‌های جفت‌شده.
+- دریافت حرکت ماوس، کلیک‌ها، اسکرول، کلیدها و متن از گوشی.
+- دریافت و ذخیرهٔ فایل‌ها و رسانه‌ها در حافظهٔ خصوصی برنامه.
+- فهرست‌کردن فایل‌ها و بسته‌ها، پیش‌نمایش تصاویر و ویدئوهای پشتیبانی‌شده و حذف موارد دریافت‌شده.
+- نصب و اجرای بسته‌های معتبر `.llmpk` در محیط برنامه‌های M-DOS.
+
+## محدودیت‌های مهم
+
+- هر دو دستگاه باید به یک شبکهٔ محلی متصل باشند و برنامهٔ M-DOS DeX روی تلویزیون باز باشد؛ این نسخه اتصال اینترنتی از بیرون شبکه یا سرویس پس‌زمینهٔ دائمی پس از بستن اجباری برنامه ندارد.
+- اتصال ذخیره‌شده تا وقتی داده‌های برنامه پاک نشوند یا برنامه حذف و دوباره نصب نشود، باقی می‌ماند. پاک‌کردن داده‌های هرکدام از دو برنامه، جفت‌سازی را حذف می‌کند.
+- کشف خودکار به فعال‌بودن multicast/mDNS در شبکه وابسته است؛ اتصال دستی با IP مسیر جایگزین است.
+- انتقال با HTTP و توکن اختصاصی در شبکهٔ محلی انجام می‌شود؛ از شبکهٔ Wi-Fi قابل اعتماد استفاده کنید.
+- `.llmpk` بستهٔ برنامهٔ مخصوص M-DOS است و جایگزین APK اندروید نیست؛ این قابلیت APKهای اندروید را نصب یا تبدیل نمی‌کند.
+- فایل‌های عمومی تا ۱۰۰ مگابایت در مخزن خصوصی Phone Link قرار می‌گیرند. افزودن فایل به فایل‌سیستم مجازی مرورگری M-DOS محدودیت ذخیره‌سازی جداگانه دارد.
+- Workflow فعلی APKهای `debug` می‌سازد. Build موفق فقط کامپایل را تأیید می‌کند؛ اتصال mDNS، جفت‌سازی، ریموت و چیدمان باید روی تلویزیون و گوشی واقعی آزمایش شوند.

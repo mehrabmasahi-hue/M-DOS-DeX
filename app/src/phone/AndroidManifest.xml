@@ -1,14 +1,16 @@
-<manifest xmlns:tools="http://schemas.android.com/tools" xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <application tools:replace="android:label"
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        tools:replace="android:label"
         android:allowBackup="false"
         android:icon="@drawable/ic_link"
         android:label="Link to M-DOS"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="true">
-        <activity android:name=".MdosCaptureActivity" android:exported="false" android:screenOrientation="portrait" android:configChanges="orientation|screenSize|keyboardHidden" />
-        <activity android:name=".CompanionActivity" android:exported="true" android:screenOrientation="portrait">
+        <activity
+            android:name=".WifiCompanionActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

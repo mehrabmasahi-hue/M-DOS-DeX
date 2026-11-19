@@ -2,6 +2,11 @@ package com.goldan.mdosdex
 
 import android.content.Context
 import android.net.Uri
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.webkit.MimeTypeMap
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,6 +17,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.net.Inet4Address
+import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
@@ -19,9 +25,11 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 
-/** Small, token-protected HTTP server for the local Wi-Fi Phone Link session. */
+/** Local HTTP bridge for M-DOS DeX. Pairing is one-time; trusted phone tokens survive restarts. */
 class PhoneLinkServer(
     context: Context,
     private val onInput: (JSONObject) -> Unit,
@@ -29,32 +37,92 @@ class PhoneLinkServer(
     private val onFileUploaded: (File, String) -> Unit,
     private val onPackageRemoved: (String) -> Unit
 ) {
-    companion object { const val PORT = 8765; private const val MAX_UPLOAD = 100L * 1024L * 1024L }
+    companion object {
+        const val PORT = 8765
+        const val SERVICE_TYPE = "_mdoslink._tcp."
+        private const val MAX_UPLOAD = 100L * 1024L * 1024L
+    }
 
     private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("mdos_phone_link_server", Context.MODE_PRIVATE)
     private val root = File(appContext.filesDir, "phone-link").apply { mkdirs() }
     private val filesDir = File(root, "files").apply { mkdirs() }
     private val appsDir = File(root, "apps").apply { mkdirs() }
-    private val token: String = ByteArray(24).also { SecureRandom().nextBytes(it) }
-        .joinToString("") { "%02x".format(it) }
+    private val deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
+        prefs.edit().putString("device_id", it).apply()
+    }
+    private val deviceName = "M-DOS DeX" + Build.MODEL?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+    @Volatile private var pairingCode: String = prefs.getString("pairing_code", null) ?: newPairingCode().also {
+        prefs.edit().putString("pairing_code", it).apply()
+    }
+    private val localToken = prefs.getString("local_token", null) ?: randomToken().also {
+        prefs.edit().putString("local_token", it).apply()
+    }
+    private val trustedPhones = ConcurrentHashMap<String, String>().apply {
+        try {
+            val saved = JSONObject(prefs.getString("trusted_phones", "{}") ?: "{}")
+            val keys = saved.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = saved.optString(key)
+                if (key.isNotBlank() && value.isNotBlank()) put(key, value)
+            }
+        } catch (_: Exception) { }
+    }
 
     @Volatile private var running = false
     private var socket: ServerSocket? = null
+    private var nsdManager: NsdManager? = null
+    @Volatile private var nsdRegistered = false
+    private var registrationListener: NsdManager.RegistrationListener? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun start() {
         if (running) return
         running = true
         thread(name = "M-DOS-PhoneLink-Server", isDaemon = true) {
             try {
-                val server = ServerSocket(PORT, 24, java.net.InetAddress.getByName("0.0.0.0"))
+                val server = ServerSocket()
+                server.reuseAddress = true
+                server.bind(InetSocketAddress("0.0.0.0", PORT), 24)
                 socket = server
+                registerNsdService()
                 while (running) {
                     try {
                         val client = server.accept()
-                        thread(name = "M-DOS-PhoneLink-Client", isDaemon = true) { client.use { handle(it) } }
-                    } catch (_: Exception) { if (running) continue }
+                        thread(name = "M-DOS-PhoneLink-Client", isDaemon = true) {
+                            client.use { handle(it) }
+                        }
+                    } catch (_: Exception) {
+                        if (running) continue
+                    }
                 }
-            } catch (_: Exception) { running = false }
+            } catch (_: Exception) {
+                running = false
+            }
+        }
+    }
+
+    private fun registerNsdService() {
+        val manager = appContext.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return
+        nsdManager = manager
+        val info = NsdServiceInfo().apply {
+            serviceName = "M-DOS DeX"
+            serviceType = SERVICE_TYPE
+            port = PORT
+            try { setAttribute("id", deviceId.toByteArray(StandardCharsets.UTF_8)) } catch (_: Exception) { }
+            try { setAttribute("ver", "2".toByteArray(StandardCharsets.UTF_8)) } catch (_: Exception) { }
+        }
+        val listener = object : NsdManager.RegistrationListener {
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) { nsdRegistered = true }
+            override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) { nsdRegistered = false }
+            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) { nsdRegistered = false }
+            override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) { nsdRegistered = false }
+        }
+        registrationListener = listener
+        mainHandler.post {
+            try { manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener) }
+            catch (_: Exception) { nsdRegistered = false }
         }
     }
 
@@ -62,18 +130,30 @@ class PhoneLinkServer(
         running = false
         try { socket?.close() } catch (_: Exception) { }
         socket = null
+        val manager = nsdManager
+        val listener = registrationListener
+        if (manager != null && listener != null) {
+            mainHandler.post { try { manager.unregisterService(listener) } catch (_: Exception) { } }
+        }
+        registrationListener = null
+        nsdRegistered = false
     }
 
     fun pairInfo(): JSONObject {
-        val ip = findLanIp() ?: "127.0.0.1"
-        return JSONObject().put("url", "http://$ip:$PORT").put("token", token)
-            .put("network", if (ip == "127.0.0.1") "اتصال Wi-Fi پیدا نشد" else "آماده اتصال در شبکه محلی")
+        val ip = findLanIp() ?: ""
+        return JSONObject()
+            .put("deviceId", deviceId)
+            .put("deviceName", deviceName)
+            .put("pairingCode", pairingCode)
+            .put("url", if (ip.isBlank()) "" else "http://$ip:$PORT")
+            .put("port", PORT)
+            .put("network", if (ip.isBlank()) "شبکه Wi-Fi پیدا نشد؛ کشف خودکار دستگاه را بررسی کنید" else "آماده اتصال در شبکه محلی")
+            .put("serviceRegistered", nsdRegistered)
+            .put("trustedPhones", trustedPhones.size)
     }
 
-    fun qrPayload(): String = pairInfo().toString()
-
     fun localFileUrl(name: String): String = "http://127.0.0.1:$PORT/file?name=" +
-        URLEncoder.encode(name, "UTF-8") + "&token=" + token
+        URLEncoder.encode(name, "UTF-8") + "&token=" + localToken
 
     fun filesJson(): String = buildFilesJson().toString()
     fun appsJson(): String = buildAppsJson().toString()
@@ -105,9 +185,7 @@ class PhoneLinkServer(
         var removed = false
         appsDir.listFiles()?.filter { it.isFile && it.extension.equals("llmpk", true) }?.forEach { file ->
             try {
-                if (JSONObject(file.readText()).optString("id") == id) {
-                    removed = file.delete() || removed
-                }
+                if (JSONObject(file.readText()).optString("id") == id) removed = file.delete() || removed
             } catch (_: Exception) { }
         }
         if (removed) onPackageRemoved(id)
@@ -120,7 +198,7 @@ class PhoneLinkServer(
         val output = BufferedOutputStream(client.getOutputStream())
         val requestLine = readLine(input) ?: return
         val parts = requestLine.split(" ")
-        if (parts.size < 2) { respond(output, 400, "Bad Request", "درخواست نامعتبر") ; return }
+        if (parts.size < 2) { respond(output, 400, "Bad Request", "درخواست نامعتبر"); return }
         val method = parts[0].uppercase()
         val target = parts[1]
         val headers = HashMap<String, String>()
@@ -133,11 +211,23 @@ class PhoneLinkServer(
         val uri = Uri.parse("http://localhost$target")
         val path = uri.path ?: "/"
         if (method == "OPTIONS") { respond(output, 204, "No Content", ""); return }
+        if (method == "GET" && path == "/identify") {
+            respondJson(output, 200, JSONObject().put("ok", true).put("deviceId", deviceId)
+                .put("deviceName", deviceName).put("port", PORT))
+            return
+        }
+
+        // Initial pairing is the only unauthenticated operation. The six-digit code is rotated after use.
+        if (method == "POST" && path == "/pair") {
+            handlePair(input, output, headers)
+            return
+        }
         if (!authorized(uri, headers)) {
-            respondJson(output, 401, JSONObject().put("ok", false).put("error", "توکن اتصال معتبر نیست")); return
+            respondJson(output, 401, JSONObject().put("ok", false).put("error", "دستگاه هنوز جفت نشده یا مجوز اتصال معتبر نیست")); return
         }
         when {
-            method == "GET" && path == "/ping" -> respondJson(output, 200, JSONObject().put("ok", true).put("name", "M-DOS DeX"))
+            method == "GET" && path == "/ping" -> respondJson(output, 200,
+                JSONObject().put("ok", true).put("name", "M-DOS DeX").put("deviceId", deviceId))
             method == "GET" && path == "/files" -> respondJson(output, 200, buildFilesJson())
             method == "GET" && path == "/apps" -> respondJson(output, 200, buildAppsJson())
             method == "GET" && path == "/file" -> {
@@ -146,8 +236,12 @@ class PhoneLinkServer(
             }
             method == "POST" && path == "/input" -> {
                 val body = readBody(input, headers["content-length"]?.toLongOrNull() ?: 0L, 256 * 1024L)
-                try { onInput(JSONObject(String(body, StandardCharsets.UTF_8))); respondJson(output, 200, JSONObject().put("ok", true)) }
-                catch (_: Exception) { respondJson(output, 400, JSONObject().put("ok", false).put("error", "فرمان نامعتبر است")) }
+                try {
+                    onInput(JSONObject(String(body, StandardCharsets.UTF_8)))
+                    respondJson(output, 200, JSONObject().put("ok", true))
+                } catch (_: Exception) {
+                    respondJson(output, 400, JSONObject().put("ok", false).put("error", "فرمان نامعتبر است"))
+                }
             }
             method == "POST" && path == "/upload" -> handleUpload(input, output, headers, uri)
             method == "DELETE" && path == "/apps" -> {
@@ -163,6 +257,44 @@ class PhoneLinkServer(
             else -> respond(output, 404, "Not Found", "مسیر پیدا نشد")
         }
     }
+
+    private fun handlePair(input: InputStream, output: BufferedOutputStream, headers: Map<String, String>) {
+        try {
+            val length = headers["content-length"]?.toLongOrNull() ?: 0L
+            val body = JSONObject(String(readBody(input, length, 16 * 1024L), StandardCharsets.UTF_8))
+            val suppliedCode = body.optString("code")
+            val phoneId = body.optString("phoneId").take(100)
+            val phoneName = body.optString("phoneName", "گوشی").take(80)
+            if (suppliedCode != pairingCode || !phoneId.matches(Regex("[A-Za-z0-9._-]{8,100}"))) {
+                respondJson(output, 401, JSONObject().put("ok", false).put("error", "کد اتصال اشتباه یا منقضی شده است"))
+                return
+            }
+            val token = randomToken()
+            trustedPhones[phoneId] = token
+            persistTrustedPhones()
+            pairingCode = newPairingCode()
+            prefs.edit().putString("pairing_code", pairingCode).apply()
+            respondJson(output, 200, JSONObject()
+                .put("ok", true)
+                .put("deviceId", deviceId)
+                .put("deviceName", deviceName)
+                .put("phoneName", phoneName)
+                .put("token", token))
+        } catch (e: Exception) {
+            respondJson(output, 400, JSONObject().put("ok", false).put("error", e.message ?: "جفت‌سازی انجام نشد"))
+        }
+    }
+
+    private fun persistTrustedPhones() {
+        val json = JSONObject()
+        trustedPhones.forEach { (id, token) -> json.put(id, token) }
+        prefs.edit().putString("trusted_phones", json.toString()).apply()
+    }
+
+    private fun newPairingCode(): String = SecureRandom().nextInt(1_000_000).toString().padStart(6, '0')
+
+    private fun randomToken(): String = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        .joinToString("") { "%02x".format(it) }
 
     private fun handleUpload(input: InputStream, output: BufferedOutputStream, headers: Map<String, String>, uri: Uri) {
         val length = headers["content-length"]?.toLongOrNull() ?: -1L
@@ -214,8 +346,7 @@ class PhoneLinkServer(
             }
         (appsDir.listFiles()?.toList() ?: emptyList()).filter { it.isFile && it.extension.equals("llmpk", true) }
             .sortedByDescending { it.lastModified() }.forEach { file ->
-                val mime = "application/vnd.mdos.llmpk"
-                arr.put(JSONObject().put("name", file.name).put("size", file.length()).put("mime", mime)
+                arr.put(JSONObject().put("name", file.name).put("size", file.length()).put("mime", "application/vnd.mdos.llmpk")
                     .put("url", localFileUrl(file.name)).put("modified", file.lastModified()).put("type", "llmpk"))
             }
         return arr
@@ -223,12 +354,13 @@ class PhoneLinkServer(
 
     private fun buildAppsJson(): JSONArray {
         val arr = JSONArray()
-        (appsDir.listFiles() ?: emptyArray()).filter { it.isFile && it.extension.equals("llmpk", true) }
-            .forEach { file -> try {
+        (appsDir.listFiles() ?: emptyArray()).filter { it.isFile && it.extension.equals("llmpk", true) }.forEach { file ->
+            try {
                 val p = JSONObject(file.readText())
                 arr.put(JSONObject().put("id", p.optString("id")).put("name", p.optString("name", file.name))
                     .put("version", p.optString("version", "?")).put("file", file.name))
-            } catch (_: Exception) { } }
+            } catch (_: Exception) { }
+        }
         return arr
     }
 
@@ -236,12 +368,13 @@ class PhoneLinkServer(
         val safe = safeName(name)
         val a = File(filesDir, safe).takeIf { it.isFile && it.canonicalFile.parentFile == filesDir.canonicalFile }
         if (a != null) return a
-        val b = File(appsDir, safe).takeIf { it.isFile && it.canonicalFile.parentFile == appsDir.canonicalFile }
-        return b
+        return File(appsDir, safe).takeIf { it.isFile && it.canonicalFile.parentFile == appsDir.canonicalFile }
     }
 
-    private fun authorized(uri: Uri, headers: Map<String, String>): Boolean =
-        (headers["x-mdos-token"] ?: uri.getQueryParameter("token")) == token
+    private fun authorized(uri: Uri, headers: Map<String, String>): Boolean {
+        val supplied = headers["x-mdos-token"] ?: uri.getQueryParameter("token") ?: return false
+        return supplied == localToken || trustedPhones.values.any { it == supplied }
+    }
 
     private fun safeName(value: String): String {
         val base = value.substringAfterLast('/').substringAfterLast('\\').trim()
@@ -294,7 +427,7 @@ class PhoneLinkServer(
     }
 
     private fun respondJson(out: BufferedOutputStream, status: Int, data: JSONObject) =
-        respond(out, status, if (status == 200) "OK" else if (status == 401) "Unauthorized" else if (status == 404) "Not Found" else "Bad Request", data.toString(), "application/json; charset=utf-8")
+        respond(out, status, when (status) { 200 -> "OK"; 401 -> "Unauthorized"; 403 -> "Forbidden"; 404 -> "Not Found"; 413 -> "Payload Too Large"; else -> "Bad Request" }, data.toString(), "application/json; charset=utf-8")
 
     private fun respondJson(out: BufferedOutputStream, status: Int, data: JSONArray) =
         respond(out, status, "OK", data.toString(), "application/json; charset=utf-8")
@@ -315,14 +448,23 @@ class PhoneLinkServer(
 
     private fun findLanIp(): String? {
         return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val net = interfaces.nextElement()
-                if (!net.isUp || net.isLoopback) continue
+            val all = NetworkInterface.getNetworkInterfaces().toList()
+                .filter { it.isUp && !it.isLoopback }
+                .sortedBy { net ->
+                    val name = net.name.lowercase()
+                    when {
+                        name.startsWith("wlan") || name.startsWith("wifi") -> 0
+                        name.startsWith("eth") || name.startsWith("en") -> 1
+                        else -> 2
+                    }
+                }
+            for (net in all) {
                 val addresses = net.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val address = addresses.nextElement()
-                    if (address is Inet4Address && !address.isLoopbackAddress && !address.isLinkLocalAddress) return address.hostAddress
+                    if (address is Inet4Address && !address.isLoopbackAddress && !address.isLinkLocalAddress) {
+                        return address.hostAddress
+                    }
                 }
             }
             null

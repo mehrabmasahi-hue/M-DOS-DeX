@@ -11,8 +11,8 @@ android {
         applicationId = "com.goldan.mdosdex"
         minSdk = 23
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
     }
 
     flavorDimensions += "device"
@@ -41,6 +41,5 @@ android {
 }
 
 dependencies {
-    implementation("com.google.zxing:core:3.5.3")
-    add("phoneImplementation", "com.journeyapps:zxing-android-embedded:4.3.0")
+    // No camera or QR-scanner dependencies are needed by Wi-Fi discovery pairing.
 }
