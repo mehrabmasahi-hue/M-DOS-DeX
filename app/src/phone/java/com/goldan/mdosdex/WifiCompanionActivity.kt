@@ -12,6 +12,9 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -394,7 +397,7 @@ class WifiCompanionActivity : Activity() {
         }
         root!!.addView(contentScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(6), dp(6), dp(6), dp(6)); setBackgroundColor(panel) }
-        listOf("mouse" to "ماوس", "apps" to "برنامه‌ها", "files" to "فایل‌ها", "control" to "کنترل").forEach { (id, title) ->
+        listOf("myphone" to "گوشی من", "mouse" to "ماوس", "apps" to "برنامه‌ها", "files" to "فایل‌ها", "control" to "کنترل").forEach { (id, title) ->
             nav.addView(button(title, if (currentTab == id) yellow else panel) { currentTab = id; renderTab() },
                 LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(2); rightMargin = dp(2) })
         }
@@ -407,11 +410,53 @@ class WifiCompanionActivity : Activity() {
         if (!::content.isInitialized) return
         content.removeAllViews()
         when (currentTab) {
+            "myphone" -> renderMyPhone()
             "mouse" -> renderMouse()
             "apps" -> renderApps()
             "files" -> renderFiles()
             else -> renderController()
         }
+    }
+
+
+    /** Local phone dashboard: device/battery/network status and one-tap sharing shortcuts. */
+    private fun renderMyPhone() {
+        content.addView(label("گوشی من · My Phone", 19f, textColor, true))
+        content.addView(label("وضعیت دستگاه و ابزارهای سریع انتقال به M-DOS", 12f, muted).apply { setPadding(0, dp(4), 0, dp(12)) })
+        val battery = try {
+            val manager = getSystemService(BATTERY_SERVICE) as BatteryManager
+            manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).takeIf { it in 0..100 }?.let { "$it٪" } ?: "نامشخص"
+        } catch (_: Exception) { "نامشخص" }
+        val charging = try {
+            val status = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        } catch (_: Exception) { false }
+        val network = try {
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            val active = cm.activeNetwork
+            val caps = if (active != null) cm.getNetworkCapabilities(active) else null
+            when {
+                caps == null -> "بدون اتصال"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "متصل به Wi-Fi"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "داده همراه"
+                else -> "متصل به شبکه"
+            }
+        } catch (_: Exception) { "وضعیت نامشخص" }
+        val info = card()
+        info.addView(label("${Build.MANUFACTURER} ${Build.MODEL}", 16f, textColor, true))
+        info.addView(label("Android ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}", 12f, muted).apply { setPadding(0, dp(5), 0, dp(9)) })
+        info.addView(label("باتری: $battery${if (charging) " · در حال شارژ" else ""}", 13f, textColor))
+        info.addView(label("شبکه: $network", 13f, textColor).apply { setPadding(0, dp(5), 0, 0) })
+        content.addView(info, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
+        content.addView(label("ارسال سریع به تلویزیون", 15f, textColor, true).apply { setPadding(0, 0, 0, dp(8)) })
+        content.addView(button("＋ انتخاب و ارسال فایل", yellow) { pickFile("file") }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(7) })
+        val media = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        media.addView(button("ارسال عکس", panel) { pickFile("image") }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        media.addView(button("ارسال ویدئو", panel) { pickFile("video") }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(7) })
+        content.addView(media)
+        content.addView(button("مدیریت فایل‌های ارسال‌شده", panel) { currentTab = "files"; renderTab() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
+        content.addView(button("باز کردن تاچ‌پد", panel) { currentTab = "mouse"; renderTab() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(7) })
+        content.addView(label("فایل‌ها فقط پس از انتخاب شما ارسال می‌شوند؛ دسترسی کامل به حافظه گوشی لازم نیست.", 11f, muted).apply { setPadding(0, dp(12), 0, 0) })
     }
 
     private fun renderMouse() {

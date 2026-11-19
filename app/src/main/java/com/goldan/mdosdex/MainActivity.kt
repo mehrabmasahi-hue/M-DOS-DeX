@@ -6,7 +6,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
+import android.view.Gravity
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.TextView
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -15,6 +20,8 @@ import org.json.JSONObject
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var linkServer: PhoneLinkServer
+    private lateinit var rootFrame: FrameLayout
+    private lateinit var diagnosticView: TextView
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,19 +62,54 @@ class MainActivity : Activity() {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    diagnosticView.visibility = View.GONE
                     applyTelevisionLayout()
                     installTelevisionNavigation()
                     injectRemoteControlApi()
                     injectPhoneLinkPairingUi()
                 }
+                override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                    super.onReceivedError(view, request, error)
+                    if (request?.isForMainFrame == true) showDiagnostic("خطای بارگذاری M-DOS: " + (error?.description?.toString() ?: "نامشخص"))
+                }
+                override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                    showDiagnostic("موتور نمایش WebView متوقف شد. برنامه را ببندید و دوباره اجرا کنید.")
+                    return true
+                }
             }
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                    if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                        showDiagnostic("خطای JavaScript: " + message.message().take(220) + " · خط " + message.lineNumber())
+                    }
+                    return true
+                }
+            }
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        setContentView(web)
+        rootFrame = FrameLayout(this)
+        diagnosticView = TextView(this).apply {
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundColor(0xDD7A1F1F.toInt())
+            textSize = 13f
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(18, 12, 18, 12)
+            visibility = View.GONE
+        }
+        rootFrame.addView(web, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        rootFrame.addView(diagnosticView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        setContentView(rootFrame)
         web.requestFocus()
         web.post { web.loadUrl("file:///android_asset/index.html") }
+    }
+
+    private fun showDiagnostic(message: String) {
+        if (!::diagnosticView.isInitialized) return
+        runOnUiThread {
+            diagnosticView.text = message
+            diagnosticView.visibility = View.VISIBLE
+        }
     }
 
     private fun applyImmersiveMode() {
@@ -89,8 +131,8 @@ class MainActivity : Activity() {
               style.textContent=[
                 'html,body{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;margin:0!important}',
                 'body{font-size:clamp(14px,1.05vw,19px)!important}',
-                '#desk{position:fixed!important;inset:0 0 clamp(64px,7vh,82px) 0!important;width:100vw!important;height:auto!important;overflow:hidden!important}',
-                '#tb{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:clamp(64px,7vh,82px)!important;min-height:clamp(64px,7vh,82px)!important;max-height:clamp(64px,7vh,82px)!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;align-items:center!important;direction:ltr!important;padding:0 clamp(12px,2vw,30px)!important;box-sizing:border-box!important;z-index:99999!important}',
+                '#desk{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:76px!important;width:100%!important;height:auto!important;overflow:hidden!important;display:block!important}',
+                '#tb{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:76px!important;min-height:76px!important;max-height:76px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;direction:ltr!important;padding:0 22px!important;box-sizing:border-box!important;z-index:99999!important}',
                 '#weatherSlot{grid-column:1!important;justify-self:start!important;direction:rtl!important;min-width:0!important;max-width:25vw!important;overflow:hidden!important}',
                 '#cen{grid-column:2!important;justify-self:center!important;min-width:0!important;max-width:48vw!important;display:flex!important;align-items:center!important;gap:clamp(3px,.5vw,9px)!important;overflow:hidden!important}',
                 '#tray{grid-column:3!important;justify-self:end!important;direction:rtl!important;display:flex!important;align-items:center!important;gap:clamp(6px,1vw,16px)!important;min-width:0!important;max-width:30vw!important;overflow:hidden!important}',
@@ -106,11 +148,11 @@ class MainActivity : Activity() {
                 '.ico span{max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;text-align:center!important}',
                 '.win:not(.mx){width:min(72vw,1280px)!important;height:min(72vh,900px)!important;max-width:calc(100vw - 48px)!important;max-height:calc(100vh - 110px)!important}',
                 '#sm,#qs,#searchPanel,#weatherPanel{bottom:calc(clamp(64px,7vh,82px) + 10px)!important;max-height:calc(100vh - 110px)!important}',
-                '#tv{inset:0 0 clamp(64px,7vh,82px) 0!important}',
+                '#tv{top:0!important;left:0!important;right:0!important;bottom:76px!important}',
                 '#firstRun{padding:clamp(12px,3vh,28px)!important;overflow-y:auto!important;align-items:center!important;justify-content:center!important}',
                 '.fr-card{width:min(760px,82vw)!important;max-height:calc(100vh - 36px)!important;min-height:0!important;overflow-y:auto!important;padding:clamp(20px,3vh,38px)!important}',
                 '.fr-input{font-size:16px!important;min-height:46px!important}',
-                '#bt,#lk{inset:0!important;width:100vw!important;height:100vh!important}',
+                '#bt,#lk{top:0!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;height:100%!important}',
                 '.win{min-width:min(320px,calc(100vw - 32px))!important;min-height:min(200px,calc(100vh - 100px))!important}',
                 'button:focus-visible,input:focus-visible,select:focus-visible,[tabindex="0"]:focus-visible{outline:3px solid #ffc928!important;outline-offset:3px!important}'
               ].join('');
