@@ -68,7 +68,7 @@ class MainActivity : Activity() {
                         .putExtra(MdosBrowserActivity.EXTRA_URL, address))
                 }
             }, "PhoneLinkNative")
-            addJavascriptInterface(MdosConnectBridge(globalControlServer, this), "MdosConnectNative")
+            addJavascriptInterface(MdosConnectBridge(globalControlServer, this@MainActivity), "MdosConnectNative")
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)

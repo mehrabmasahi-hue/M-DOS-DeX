@@ -117,8 +117,8 @@ class MdosGlobalControlServer(
             serviceName = "M-DOS-${deviceId.take(8)}"
             serviceType = MdosProtocol.SERVICE_TYPE
             setPort(port)
-            setAttribute("id", deviceId.toByteArray(Charsets.UTF_8))
-            setAttribute("v", MdosProtocol.PROTOCOL_VERSION.toString().toByteArray(Charsets.UTF_8))
+            setAttribute("id", deviceId)
+            setAttribute("v", MdosProtocol.PROTOCOL_VERSION.toString())
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {}
