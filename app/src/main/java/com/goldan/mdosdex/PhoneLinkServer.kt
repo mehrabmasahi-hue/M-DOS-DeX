@@ -7,6 +7,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.webkit.MimeTypeMap
 import org.json.JSONArray
 import org.json.JSONObject
@@ -76,6 +77,7 @@ class PhoneLinkServer(
     @Volatile private var nsdRegistered = false
     private var registrationListener: NsdManager.RegistrationListener? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val startedAtMs = SystemClock.elapsedRealtime()
 
     fun start() {
         if (running) return
@@ -111,7 +113,7 @@ class PhoneLinkServer(
             serviceType = SERVICE_TYPE
             port = PORT
             try { setAttribute("id", deviceId) } catch (_: Exception) { }
-            try { setAttribute("ver", "2") } catch (_: Exception) { }
+            try { setAttribute("ver", MdosLinkProtocol.VERSION.toString()) } catch (_: Exception) { }
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) { nsdRegistered = true }
@@ -150,6 +152,9 @@ class PhoneLinkServer(
             .put("network", if (ip.isBlank()) "شبکه Wi-Fi پیدا نشد؛ کشف خودکار دستگاه را بررسی کنید" else "آماده اتصال در شبکه محلی")
             .put("serviceRegistered", nsdRegistered)
             .put("trustedPhones", trustedPhones.size)
+            .put("protocol", MdosLinkProtocol.ID)
+            .put("protocolVersion", MdosLinkProtocol.VERSION)
+            .put("capabilities", MdosLinkProtocol.capabilitiesJson())
     }
 
     fun localFileUrl(name: String): String = "http://127.0.0.1:$PORT/file?name=" +
@@ -213,7 +218,10 @@ class PhoneLinkServer(
         if (method == "OPTIONS") { respond(output, 204, "No Content", ""); return }
         if (method == "GET" && path == "/identify") {
             respondJson(output, 200, JSONObject().put("ok", true).put("deviceId", deviceId)
-                .put("deviceName", deviceName).put("port", PORT))
+                .put("deviceName", deviceName).put("port", PORT)
+                .put("protocol", MdosLinkProtocol.ID)
+                .put("protocolVersion", MdosLinkProtocol.VERSION)
+                .put("minCompatibleVersion", MdosLinkProtocol.MIN_COMPATIBLE_VERSION))
             return
         }
 
@@ -226,8 +234,9 @@ class PhoneLinkServer(
             respondJson(output, 401, JSONObject().put("ok", false).put("error", "دستگاه هنوز جفت نشده یا مجوز اتصال معتبر نیست")); return
         }
         when {
-            method == "GET" && path == "/ping" -> respondJson(output, 200,
-                JSONObject().put("ok", true).put("name", "M-DOS DeX").put("deviceId", deviceId))
+            method == "GET" && (path == "/hello" || path == "/ping") -> respondJson(output, 200,
+                MdosLinkProtocol.hello(deviceId, deviceName,
+                    (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0), trustedPhones.size))
             method == "GET" && path == "/files" -> respondJson(output, 200, buildFilesJson())
             method == "GET" && path == "/apps" -> respondJson(output, 200, buildAppsJson())
             method == "GET" && path == "/file" -> {

@@ -17,6 +17,8 @@ import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.text.InputType
 import android.view.Gravity
@@ -50,6 +52,37 @@ class WifiCompanionActivity : Activity() {
     private val textColor = 0xFFF5F7FA.toInt()
     private val muted = 0xFF9CAFC4.toInt()
     private val io = Executors.newSingleThreadExecutor()
+    private val heartbeatHandler = Handler(Looper.getMainLooper())
+    @Volatile private var heartbeatInFlight = false
+    private var heartbeatRunning = false
+    private var connectionStatusLabel: TextView? = null
+    private var protocolInfo = JSONObject()
+    private val heartbeatTask = object : Runnable {
+        override fun run() {
+            if (!heartbeatRunning || baseUrl.isBlank() || token.isBlank()) return
+            if (heartbeatInFlight) {
+                heartbeatHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+                return
+            }
+            heartbeatInFlight = true
+            io.execute {
+                val hello = try { requestHello() } catch (_: Exception) { null }
+                runOnUiThread {
+                    heartbeatInFlight = false
+                    if (!heartbeatRunning) return@runOnUiThread
+                    if (hello != null) {
+                        protocolInfo = hello
+                        connectionStatusLabel?.text = connectionSummary(hello)
+                        connectionStatusLabel?.setTextColor(0xFF79D6A5.toInt())
+                    } else {
+                        connectionStatusLabel?.text = "ارتباط با تلویزیون قطع شده؛ تلاش مجدد خودکار…"
+                        connectionStatusLabel?.setTextColor(0xFFFFB45E.toInt())
+                    }
+                    heartbeatHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+                }
+            }
+        }
+    }
     private val prefs by lazy { getSharedPreferences("phone_link", MODE_PRIVATE) }
     private lateinit var nsd: NsdManager
     private lateinit var wifiManager: WifiManager
@@ -80,6 +113,7 @@ class WifiCompanionActivity : Activity() {
     companion object {
         private const val SERVICE_TYPE = "_mdoslink._tcp."
         private const val FILE_PICKER = 721
+        private const val HEARTBEAT_INTERVAL_MS = 10_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +134,7 @@ class WifiCompanionActivity : Activity() {
     }
 
     private fun showHome(message: String? = null) {
+        stopHeartbeat()
         stopDiscovery()
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -357,18 +392,66 @@ class WifiCompanionActivity : Activity() {
         }
     }
 
+    /** Negotiates protocol capabilities; falls back to the original /ping contract for older TVs. */
+    private fun requestHello(): JSONObject {
+        val hello = try {
+            request("GET", "/hello")
+        } catch (_: Exception) {
+            request("GET", "/ping").put("protocolVersion", 1)
+                .put("minCompatibleVersion", 1).put("legacy", true)
+        }
+        val protocol = hello.optString("protocol", MdosLinkProtocol.ID)
+        if (protocol != MdosLinkProtocol.ID) {
+            throw IllegalStateException("پروتکل ارتباطی تلویزیون پشتیبانی نمی‌شود.")
+        }
+        val minimum = hello.optInt("minCompatibleVersion", 1)
+        if (MdosLinkProtocol.VERSION < minimum) {
+            throw IllegalStateException("نسخه Link to M-DOS قدیمی است؛ هر دو برنامه را به‌روزرسانی کن.")
+        }
+        return hello
+    }
+
+    private fun connectionSummary(hello: JSONObject): String {
+        val version = hello.optInt("protocolVersion", 1)
+        val capabilities = hello.optJSONArray("capabilities")?.length() ?: 0
+        return if (hello.optBoolean("legacy")) {
+            "اتصال فعال · حالت سازگاری قدیمی"
+        } else {
+            "اتصال فعال · Phone Link API $version · $capabilities قابلیت"
+        }
+    }
+
+    private fun startHeartbeat() {
+        heartbeatRunning = true
+        heartbeatHandler.removeCallbacks(heartbeatTask)
+        heartbeatHandler.postDelayed(heartbeatTask, HEARTBEAT_INTERVAL_MS)
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatRunning = false
+        heartbeatHandler.removeCallbacks(heartbeatTask)
+        connectionStatusLabel = null
+    }
+
     private fun verifyConnection() {
         if (baseUrl.isBlank() || token.isBlank()) {
             showHome("هنوز دستگاهی جفت نشده است. ابتدا تلویزیون را جستجو کن.")
             return
         }
-        statusText?.text = "در حال بررسی اتصال به M-DOS…"
+        statusText?.text = "در حال بررسی اتصال و نسخه ارتباطی M-DOS…"
         io.execute {
-            val ok = try { request("GET", "/ping").optBoolean("ok") } catch (_: Exception) { false }
+            var failure: String? = null
+            val hello = try { requestHello() } catch (e: Exception) {
+                failure = e.message
+                null
+            }
             runOnUiThread {
-                if (ok) showConnected() else {
-                    // Do not erase saved credentials: when the TV returns to the LAN it can reconnect automatically.
-                    showHome("تلویزیون فعلاً در دسترس نیست. اتصال ذخیره شده؛ جستجو را دوباره بزن.")
+                if (hello != null) {
+                    protocolInfo = hello
+                    showConnected()
+                } else {
+                    // Keep saved credentials so a temporarily offline TV can reconnect later.
+                    showHome(failure ?: "تلویزیون فعلاً در دسترس نیست. اتصال ذخیره شده؛ جستجو را دوباره بزن.")
                     discoverDevices()
                 }
             }
@@ -376,6 +459,7 @@ class WifiCompanionActivity : Activity() {
     }
 
     private fun showConnected() {
+        stopHeartbeat()
         stopDiscovery()
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
@@ -385,6 +469,10 @@ class WifiCompanionActivity : Activity() {
         }
         header.addView(label("LINK TO M-DOS", 19f, yellow, true))
         header.addView(label("متصل به ${prefs.getString("device_name", "M-DOS DeX")}", 12f, muted).apply { setPadding(0, dp(3), 0, 0) })
+        val connectionStatus = label(connectionSummary(protocolInfo), 11f, 0xFF79D6A5.toInt())
+            .apply { setPadding(0, dp(5), 0, dp(2)) }
+        connectionStatusLabel = connectionStatus
+        header.addView(connectionStatus)
         header.addView(button("بازگشت به دستگاه‌ها", panel) { showHome("اتصال ذخیره شد؛ برای اتصال دوباره همین تلویزیون را انتخاب کن."); discoverDevices() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)).apply { topMargin = dp(8) })
         root!!.addView(header)
@@ -404,6 +492,7 @@ class WifiCompanionActivity : Activity() {
         root!!.addView(nav)
         setContentView(root!!)
         renderTab()
+        startHeartbeat()
     }
 
     private fun renderTab() {
@@ -846,6 +935,7 @@ class WifiCompanionActivity : Activity() {
     }
 
     override fun onDestroy() {
+        stopHeartbeat()
         stopDiscovery()
         io.shutdownNow()
         super.onDestroy()
