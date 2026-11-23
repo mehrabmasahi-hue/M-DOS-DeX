@@ -1,61 +1,83 @@
-# M-DOS DeX — Wi-Fi Link Edition
+<div align="center">
 
-این نسخه شامل اصلاح خطای کامپایل NSD است: `NsdServiceInfo.setAttribute` باید مقدار String بگیرد، نه ByteArray.
+# 🟨 M-DOS DeX
 
-این patch برای مخزن موجود `mehrabmasahi-hue/M-DOS-DeX` است. فایل‌ها را از ریشهٔ ZIP روی ریشهٔ مخزن استخراج کنید و فایل‌های هم‌نام را جایگزین کنید.
+### A Windows-inspired desktop experience for Android TV.
 
-## نصب patch در Termux
+**Android TV • Phone Companion • Wi-Fi Control**
 
-ZIP را در پوشهٔ Download گوشی قرار دهید و این دستورات را اجرا کنید:
+[![Build](https://github.com/mehrabmasahi-hue/M-DOS-DeX/actions/workflows/android.yml/badge.svg)](https://github.com/mehrabmasahi-hue/M-DOS-DeX/actions)
+
+[Download APKs](https://github.com/mehrabmasahi-hue/M-DOS-DeX/releases)
+·
+[Report a Bug](https://github.com/mehrabmasahi-hue/M-DOS-DeX/issues)
+·
+[Contribute](CONTRIBUTING.md)
+
+</div>
+
+---
+
+## 🌟 About
+
+M-DOS DeX is an experimental Android project that brings a desktop-style M-DOS experience to Android TV, with a companion phone application.
+
+## Features
+
+- Windows-inspired desktop interface
+- Android TV and Android Phone editions
+- Link to M-DOS companion application
+- Local Wi-Fi device discovery
+- Phone touchpad and keyboard controls
+- File transfer and LLMPK package management
+- Automated APK builds using GitHub Actions
+
+## 📥 Download
+
+Visit [GitHub Releases](https://github.com/mehrabmasahi-hue/M-DOS-DeX/releases).
+
+If no release is available yet, download the latest successful build from [GitHub Actions](https://github.com/mehrabmasahi-hue/M-DOS-DeX/actions).
+
+The project currently provides debug/preview APKs. Test on your own devices before relying on features.
+
+## 📺 Installation
+
+1. Install the TV APK on Android TV.
+2. Install the Phone APK on your Android phone.
+3. Connect both devices to the same Wi-Fi network.
+4. Open M-DOS DeX on TV.
+5. Open Link to M-DOS on your phone.
+
+## 🛠 Build from source
+
+Requirements: JDK 17 and Gradle 8.9.
 
 ```bash
-cd ~/M-DOS-DeX-repo
-unzip -o /sdcard/Download/M-DOS-DeX-WiFi-Pairing-Patch.zip -d .
-rm -f app/src/phone/java/com/goldan/mdosdex/CompanionActivity.kt app/src/phone/java/com/goldan/mdosdex/MdosCaptureActivity.kt
-git status --short
-git add -A
-git commit -m "Fix Wi-Fi pairing build and NSD attributes"
-git push origin main
+git clone https://github.com/mehrabmasahi-hue/M-DOS-DeX.git
+cd M-DOS-DeX
+gradle --no-daemon assemblePhoneDebug assembleTvDebug
 ```
 
-خود ZIP را به‌عنوان یک فایل واحد به مخزن اضافه نکنید؛ محتویاتش باید در مسیرهای پروژه استخراج شود. پس از push، GitHub Actions به‌طور خودکار هر دو APK آزمایشی را می‌سازد. سپس artifact را از اجرای جدید Actions دانلود کنید.
+## 🤝 Contributing
 
-## اتصال دائمی گوشی به تلویزیون
+We welcome bug reports, ideas, UI improvements, translations, testing and code contributions.
 
-1. M-DOS DeX را روی Android TV باز کنید و برنامه داخلی **Phone Link** را اجرا کنید.
-2. گوشی و تلویزیون را به یک شبکه Wi-Fi وصل کنید.
-3. برنامه **Link to M-DOS** را روی گوشی باز کنید. برنامه تلویزیون‌های M-DOS را با Android NSD/mDNS پیدا می‌کند.
-4. تلویزیون را انتخاب کنید و کد شش‌رقمی نمایش‌داده‌شده در Phone Link را فقط یک‌بار وارد کنید.
-5. پس از جفت‌سازی، هر دو برنامه توکن و شناسهٔ دستگاه را ذخیره می‌کنند. از دفعات بعد، گوشی با پیدا کردن همان شناسه به‌طور خودکار متصل می‌شود و کد نمی‌خواهد.
+Read [CONTRIBUTING.md](CONTRIBUTING.md).
 
-اگر روتر multicast/mDNS را مسدود کند، در برنامه گوشی از **اتصال دستی با IP** استفاده کنید و IP و پورت `8765` را که Phone Link روی تلویزیون نشان می‌دهد وارد کنید. در این حالت هم برنامه شناسهٔ تلویزیون را بررسی می‌کند؛ اگر همان تلویزیون قبلاً جفت شده باشد، توکن ذخیره‌شده را به‌کار می‌برد و کد دوباره نمی‌خواهد.
+## ⚠️ Project status
 
-## امکانات Link to M-DOS (گوشی)
+M-DOS DeX is under active development. A successful build does not guarantee that every feature works on every Android device or TV.
 
-- کشف خودکار تلویزیون‌های M-DOS در شبکه محلی و اتصال مجدد خودکار به تلویزیون جفت‌شده.
-- جفت‌سازی اولیه با کد شش‌رقمی؛ بدون QR، دوربین یا مجوز دوربین.
-- تاچ‌پد معمولی و تمام‌صفحه، حرکت نشانگر، کلیک چپ و راست، نگه‌داشتن و کشیدن، اسکرول دو انگشتی.
-- صفحهٔ کنترل کلیدها: Escape، Tab، Enter، Backspace، کلیدهای جهت، Home، End، Page Up و Page Down.
-- ارسال متن از صفحه‌کلید گوشی به M-DOS.
-- ارسال هر نوع فایل، تصویر یا ویدئو به مخزن Phone Link روی تلویزیون؛ سقف انتقال هر فایل ۱۰۰ مگابایت.
-- ارسال بسته‌های `.llmpk`، مشاهدهٔ فهرست بسته‌ها و حذف آن‌ها.
-- فهرست‌کردن و حذف فایل‌های منتقل‌شده.
+## فارسی
 
-## امکانات Phone Link (داخل تلویزیون)
+M-DOS DeX پروژه‌ای آزمایشی برای اجرای یک محیط دسکتاپی شبیه ویندوز روی تلویزیون اندرویدی است که با برنامه همراه گوشی از طریق Wi-Fi ارتباط برقرار می‌کند.
 
-- M-DOS DeX بدون اتصال گوشی نیز اجرا می‌شود.
-- نمایش کد جفت‌سازی، IP محلی، پورت و تعداد گوشی‌های جفت‌شده.
-- دریافت حرکت ماوس، کلیک‌ها، اسکرول، کلیدها و متن از گوشی.
-- دریافت و ذخیرهٔ فایل‌ها و رسانه‌ها در حافظهٔ خصوصی برنامه.
-- فهرست‌کردن فایل‌ها و بسته‌ها، پیش‌نمایش تصاویر و ویدئوهای پشتیبانی‌شده و حذف موارد دریافت‌شده.
-- نصب و اجرای بسته‌های معتبر `.llmpk` در محیط برنامه‌های M-DOS.
+امکانات پروژه شامل محیط دسکتاپ، نسخه گوشی و تلویزیون، کنترل بی‌سیم، انتقال فایل و بسته‌های LLMPK است.
 
-## محدودیت‌های مهم
+برای دانلود، به بخش [Releases](https://github.com/mehrabmasahi-hue/M-DOS-DeX/releases) مراجعه کنید.
 
-- هر دو دستگاه باید به یک شبکهٔ محلی متصل باشند و برنامهٔ M-DOS DeX روی تلویزیون باز باشد؛ این نسخه اتصال اینترنتی از بیرون شبکه یا سرویس پس‌زمینهٔ دائمی پس از بستن اجباری برنامه ندارد.
-- اتصال ذخیره‌شده تا وقتی داده‌های برنامه پاک نشوند یا برنامه حذف و دوباره نصب نشود، باقی می‌ماند. پاک‌کردن داده‌های هرکدام از دو برنامه، جفت‌سازی را حذف می‌کند.
-- کشف خودکار به فعال‌بودن multicast/mDNS در شبکه وابسته است؛ اتصال دستی با IP مسیر جایگزین است.
-- انتقال با HTTP و توکن اختصاصی در شبکهٔ محلی انجام می‌شود؛ از شبکهٔ Wi-Fi قابل اعتماد استفاده کنید.
-- `.llmpk` بستهٔ برنامهٔ مخصوص M-DOS است و جایگزین APK اندروید نیست؛ این قابلیت APKهای اندروید را نصب یا تبدیل نمی‌کند.
-- فایل‌های عمومی تا ۱۰۰ مگابایت در مخزن خصوصی Phone Link قرار می‌گیرند. افزودن فایل به فایل‌سیستم مجازی مرورگری M-DOS محدودیت ذخیره‌سازی جداگانه دارد.
-- Workflow فعلی APKهای `debug` می‌سازد. Build موفق فقط کامپایل را تأیید می‌کند؛ اتصال mDNS، جفت‌سازی، ریموت و چیدمان باید روی تلویزیون و گوشی واقعی آزمایش شوند.
+برای گزارش خطا یا مشارکت در توسعه، از بخش Issues و فایل CONTRIBUTING استفاده کنید.
+
+---
+
+Created by [mehrabmasahi-hue](https://github.com/mehrabmasahi-hue)
