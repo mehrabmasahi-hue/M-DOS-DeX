@@ -20,6 +20,7 @@ import org.json.JSONObject
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var linkServer: PhoneLinkServer
+    private lateinit var globalControlServer: MdosGlobalControlServer
     private lateinit var rootFrame: FrameLayout
     private lateinit var diagnosticView: TextView
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -37,6 +38,14 @@ class MainActivity : Activity() {
             onPackageRemoved = { id -> mainHandler.post { webIfReady("window.MDOSLink&&window.MDOSLink.uninstallPackage(${JSONObject.quote(id)});") } }
         )
         linkServer.start()
+
+        globalControlServer = MdosGlobalControlServer(this) { command ->
+            mainHandler.post {
+                val safeCommand = JSONObject.quote(command)
+                webIfReady("window.MDOSConnect&&window.MDOSConnect.handleRemoteCommand($safeCommand);")
+            }
+        }
+        globalControlServer.start()
 
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -59,6 +68,7 @@ class MainActivity : Activity() {
                         .putExtra(MdosBrowserActivity.EXTRA_URL, address))
                 }
             }, "PhoneLinkNative")
+            addJavascriptInterface(MdosConnectBridge(globalControlServer, this), "MdosConnectNative")
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
@@ -367,6 +377,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (::globalControlServer.isInitialized) globalControlServer.close()
         if (::linkServer.isInitialized) linkServer.close()
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
