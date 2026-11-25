@@ -59,9 +59,13 @@ class MainActivity : Activity() {
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             settings.allowFileAccess = true
-            settings.allowContentAccess = true
+            settings.allowContentAccess = false
+            settings.allowFileAccessFromFileURLs = false
+            settings.allowUniversalAccessFromFileURLs = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
             settings.mediaPlaybackRequiresUserGesture = false
-            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             addJavascriptInterface(PhoneLinkBridge(linkServer) { address ->
                 mainHandler.post {
                     startActivity(Intent(this@MainActivity, MdosBrowserActivity::class.java)
@@ -142,7 +146,7 @@ class MainActivity : Activity() {
                 'html,body{width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;margin:0!important}',
                 'body{font-size:clamp(14px,1.05vw,19px)!important}',
                 '#desk{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:76px!important;width:100%!important;height:auto!important;overflow:hidden!important;display:block!important}',
-                '#tb{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:76px!important;min-height:76px!important;max-height:76px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;direction:ltr!important;padding:0 22px!important;box-sizing:border-box!important;z-index:99999!important}',
+                '#tb{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;height:76px!important;min-height:76px!important;max-height:76px!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)!important;align-items:center!important;direction:ltr!important;padding:0 22px!important;box-sizing:border-box!important;z-index:99999!important}',
                 '#weatherSlot{grid-column:1!important;justify-self:start!important;direction:rtl!important;min-width:0!important;max-width:25vw!important;overflow:hidden!important}',
                 '#cen{grid-column:2!important;justify-self:center!important;min-width:0!important;max-width:48vw!important;display:flex!important;align-items:center!important;gap:clamp(3px,.5vw,9px)!important;overflow:hidden!important}',
                 '#tray{grid-column:3!important;justify-self:end!important;direction:rtl!important;display:flex!important;align-items:center!important;gap:clamp(6px,1vw,16px)!important;min-width:0!important;max-width:30vw!important;overflow:hidden!important}',
